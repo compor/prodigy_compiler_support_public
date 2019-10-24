@@ -8,6 +8,9 @@
 
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemorySSA.h"
+#include "llvm/Analysis/DependenceAnalysis.h"
+
+#include <vector>
 
 using namespace llvm;
 
@@ -40,6 +43,7 @@ struct Prefetcher : public FunctionPass {
 	virtual void getAnalysisUsage(AnalysisUsage& AU) const override {
 		//AU.addRequired<LoopInfoWrapperPass>();
 		AU.addRequired<MemorySSAWrapperPass>();
+		AU.addRequired<DependenceAnalysisWrapperPass>();
 	}
 
 	bool printAll(Function &F) {
@@ -52,39 +56,42 @@ struct Prefetcher : public FunctionPass {
 		return false;
 	}
 
-	bool identifyGEP(Function &F) {
+	bool identifyGEP(Function &F, DependenceInfo & DI) {
 
 		bool trace = false;
+
+		std::vector<llvm::Instruction*> insns;
 
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
 				if (I.getOpcode() == Instruction::GetElementPtr) {
-					trace = true;
 					errs() << I << '\n';
-					//					errs() << I.getOpcodeName() << " : "
-					//							<< I.getOperand(0) << " : "
-					//							<< I.getOperand(1) << "\n\n";
-				}
-				else if (trace) {
-					errs() << I
-							<< " " << I.getNumOperands() << '\n';
-				}
-
-				if (I.getOpcode() == Instruction::Load) {
-
-					if (trace) {
-						errs() << "\n";
-					}
-
-					trace = false;
+					insns.push_back(&I);
 				}
 			}
 		}
 
+		if (insns.size() > 0) {
+
+			for (int i = 0; i < insns.size() -1; ++i) {
+				if (DI.depends(insns.at(i), insns.at(i+1), true) ||
+						DI.depends(insns.at(i+1), insns.at(i), true)) {
+					errs() << "GEP DEPENDENCE!" << "\n";
+				}
+				else {
+					errs() << "NO GEP DEPENDENCE!\n" << "\n";
+				}
+
+				// identify if GEP depends on another GEP
+			}
+		}
 		return false;
 	}
 
 	bool identifyMemoryAllocations(Function & F) {
+
+		bool malloc_present = false;
+
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
 				CallSite CS(&I);
@@ -92,15 +99,23 @@ struct Prefetcher : public FunctionPass {
 					continue;
 				}
 				Value *called = CS.getCalledValue()->stripPointerCasts();
+
 				if (llvm::Function *f = dyn_cast<Function>(called)) {
 					if (f->getName().equals("calloc")) {
-						errs() << F.getName() << " -> " << f->getName() << ", elements: " << *(I.getOperand(0)) << ", size: " << *(I.getOperand(1)) << "\n";
+						malloc_present = true;
+						errs() << "  Insert code to write to Node table: resulting ptr of calloc, num elements: << *(I.getOperand(0)), size of element: << *(I.getOperand(1)) \n";
 					}
 					else if (f->getName().equals("malloc")) {
-						errs() << F.getName() << " -> " << f->getName() << ", size: " << *(I.getOperand(0)) << "\n";
+						malloc_present = true;
+						errs() << "  Insert code to write to Node table: resulting ptr of malloc, size: << *(I.getOperand(0)), size of element: might be able to get this using LLVM type information, otherwise speculate - 4 bytes? \n";
 					}
 				}
+				// Check for other allocation functions - C++ new, etc.
 			}
+		}
+
+		if (malloc_present == true) {
+			errs() << "  Select and emit trigger node\n";
 		}
 
 		return false;
@@ -108,15 +123,19 @@ struct Prefetcher : public FunctionPass {
 
 	bool runOnFunction(Function &F) override {
 
+		errs() << "\n" << F.getName() << "\n";
+
 		//LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
-		MSSA.print(errs());
+		//		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
+		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
+
+		//MSSA.print(errs());
 
 		//		errs() << "Prefetcher: ";
 		//		errs().write_escaped(F.getName()) << '\n';
 
-//		identifyGEP(F);
-//		identifyMemoryAllocations(F);
+		identifyGEP(F, DI);
+		identifyMemoryAllocations(F);
 		//		printAll(F);
 
 		return false;
