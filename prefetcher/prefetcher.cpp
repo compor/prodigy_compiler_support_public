@@ -12,6 +12,8 @@
 
 #include <vector>
 
+#include <cxxabi.h>
+
 using namespace llvm;
 
 namespace {
@@ -35,6 +37,14 @@ static RegisterPass<Prefetcher_Module> Y("prefetcher_module", "Module Prefetcher
 		true /* Analysis Pass */);
 
 
+inline std::string demangle(const char* name)
+{
+        int status = -1;
+
+        std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
+        return (status == 0) ? res.get() : std::string(name);
+}
+
 namespace {
 struct Prefetcher : public FunctionPass {
 	static char ID;
@@ -56,6 +66,48 @@ struct Prefetcher : public FunctionPass {
 		return false;
 	}
 
+	bool usedInLoad(llvm::Instruction &I) {
+		for (auto &u: I.uses()) {
+			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+			if (user->getOpcode() == Instruction::Load) {
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	bool recurseUsesSilent(llvm::Instruction &I) {
+		bool ret = false;
+
+		for (auto &u: I.uses()) {
+			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+			if (user->getOpcode() == Instruction::GetElementPtr) {
+				return true;
+			}
+
+			ret = recurseUsesSilent(*user);
+		}
+
+		return ret;
+	}
+
+	bool recurseUses(llvm::Instruction &I) {
+		for (auto &u: I.uses()) {
+			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+			if (user->getOpcode() == Instruction::GetElementPtr) {
+				errs() << *user << "\n";
+			}
+
+			recurseUses(*user);
+		}
+
+		return false;
+	}
+
 	bool identifyGEP(Function &F, DependenceInfo & DI) {
 
 		bool trace = false;
@@ -66,33 +118,17 @@ struct Prefetcher : public FunctionPass {
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
 				if (I.getOpcode() == Instruction::GetElementPtr) {
-					errs() << I << '\n';
+//					errs() << I << '\n';
 					insns.push_back(&I);
 				}
 
 				if (I.getOpcode() == Instruction::Load) {
-					errs() << I << '\n';
+//					errs() << I << '\n';
 					loads.push_back(&I);
 				}
 			}
 		}
 
-
-		// Replace DI with Chris's DDGraphPass
-		if (insns.size() > 0) {
-
-			for (int i = 0; i < insns.size() -1; ++i) {
-				if (DI.depends((llvm::Instruction*)insns.at(i), (llvm::Instruction*)insns.at(i+1), true) ||
-						DI.depends((llvm::Instruction*)insns.at(i+1), (llvm::Instruction*)insns.at(i), true)) {
-					errs() << "GEP DEPENDENCE!" << "\n";
-				}
-				else {
-					errs() << "NO GEP DEPENDENCE!\n" << "\n";
-				}
-
-				// identify if GEP depends on another GEP
-			}
-		}
 
 		// Identify if GEP depends on another GEP
 		// Replace DI with Chris's DDGraphPass
@@ -101,46 +137,25 @@ struct Prefetcher : public FunctionPass {
 			for (int i = 0; i < loads.size() -1; ++i) {
 				if (DI.depends((llvm::Instruction*)loads.at(i), (llvm::Instruction*)loads.at(i+1), true) ||
 						DI.depends((llvm::Instruction*)loads.at(i+1), (llvm::Instruction*)loads.at(i), true)) {
-					errs() << "LOAD DEPENDENCE!" << "\n";
+//					errs() << "LOAD DEPENDENCE!" << "\n";
 				}
 				else {
-					errs() << "NO LOAD DEPENDENCE!\n" << "\n";
+//					errs() << "NO LOAD DEPENDENCE!\n" << "\n";
 				}
 			}
 		}
-//       SSA Form - mem2reg
-//		  void visitInstruction(llvm::Instruction &CurI) {
-//		    if (shouldSkip(CurI)) {
-//		      return;
-//		    }
-//
-//		    for (auto &u : CurI.uses()) {
-//		      auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
-//		      if (user && !shouldSkip(user)) {
-//		        auto src = Graph->getOrInsertNode(&CurI);
-//		        auto dst = Graph->getOrInsertNode(user);
-//		        src->addDependentNode(dst, {DO_Data, DH_Flow});
-//		      }
-//		    }
-//		}
 
-		// Identify if Load depends on GEP
-		// Replace DI with Chris's DDGraphPass
-		if (loads.size() > 0 && insns.size() > 0) {
-			for (int i = 0; i < loads.size(); ++i) {
-				for (int j = 0; j < insns.size(); ++j) {
-					if (DI.depends((llvm::Instruction*)loads[i], (llvm::Instruction*)insns[j], true) ||
-							DI.depends((llvm::Instruction*)insns[j], (llvm::Instruction*)loads[i], true)) {
-						errs() << "LOAD DEPENDENDS ON GEP!" << "\n";
-					}
-					else {
-						errs() << "NO LOAD ON GEP DEPENDENCE!\n" << "\n";
-					}
-
-					// identify if GEP depends on another GEP
+		if (insns.size() > 0) {
+			for (auto I : insns) {
+				if (I->getOpcode() == llvm::Instruction::GetElementPtr && usedInLoad(*I) && recurseUsesSilent(*I)) {
+					errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+					errs() << *I << " is used by:\n";
+					recurseUses(*I);
+					errs() << "\n";
 				}
 			}
 		}
+
 		return false;
 	}
 
@@ -178,9 +193,6 @@ struct Prefetcher : public FunctionPass {
 	}
 
 	bool runOnFunction(Function &F) override {
-
-		errs() << "\n" << F.getName() << "\n";
-
 		//LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 		//		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
 		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
