@@ -39,10 +39,10 @@ static RegisterPass<Prefetcher_Module> Y("prefetcher_module", "Module Prefetcher
 
 inline std::string demangle(const char* name)
 {
-        int status = -1;
+	int status = -1;
 
-        std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
-        return (status == 0) ? res.get() : std::string(name);
+	std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
+	return (status == 0) ? res.get() : std::string(name);
 }
 
 namespace {
@@ -66,8 +66,8 @@ struct Prefetcher : public FunctionPass {
 		return false;
 	}
 
-	bool usedInLoad(llvm::Instruction &I) {
-		for (auto &u: I.uses()) {
+	bool usedInLoad(llvm::Instruction *I) {
+		for (auto &u: I->uses()) {
 			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
 			if (user->getOpcode() == Instruction::Load) {
@@ -108,7 +108,7 @@ struct Prefetcher : public FunctionPass {
 		return false;
 	}
 
-	bool identifyGEP(Function &F, DependenceInfo & DI) {
+	bool identifyGEPDependence(Function &F, DependenceInfo & DI) {
 
 		bool trace = false;
 
@@ -118,40 +118,24 @@ struct Prefetcher : public FunctionPass {
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
 				if (I.getOpcode() == Instruction::GetElementPtr) {
-//					errs() << I << '\n';
 					insns.push_back(&I);
 				}
 
 				if (I.getOpcode() == Instruction::Load) {
-//					errs() << I << '\n';
 					loads.push_back(&I);
-				}
-			}
-		}
-
-
-		// Identify if GEP depends on another GEP
-		// Replace DI with Chris's DDGraphPass
-		if (loads.size() > 0) {
-
-			for (int i = 0; i < loads.size() -1; ++i) {
-				if (DI.depends((llvm::Instruction*)loads.at(i), (llvm::Instruction*)loads.at(i+1), true) ||
-						DI.depends((llvm::Instruction*)loads.at(i+1), (llvm::Instruction*)loads.at(i), true)) {
-//					errs() << "LOAD DEPENDENCE!" << "\n";
-				}
-				else {
-//					errs() << "NO LOAD DEPENDENCE!\n" << "\n";
 				}
 			}
 		}
 
 		if (insns.size() > 0) {
 			for (auto I : insns) {
-				if (I->getOpcode() == llvm::Instruction::GetElementPtr && usedInLoad(*I) && recurseUsesSilent(*I)) {
-					errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-					errs() << *I << " is used by:\n";
-					recurseUses(*I);
-					errs() << "\n";
+				if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
+					if (usedInLoad(I) && recurseUsesSilent(*I)) {
+						errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+						errs() << *I << " is used by:\n";
+						recurseUses(*I);
+						errs() << "\n";
+					}
 				}
 			}
 		}
@@ -202,7 +186,7 @@ struct Prefetcher : public FunctionPass {
 		//		errs() << "Prefetcher: ";
 		//		errs().write_escaped(F.getName()) << '\n';
 
-		identifyGEP(F, DI);
+		identifyGEPDependence(F, DI);
 		identifyMemoryAllocations(F);
 		//		printAll(F);
 
