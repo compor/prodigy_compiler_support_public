@@ -61,6 +61,7 @@ struct Prefetcher : public FunctionPass {
 		bool trace = false;
 
 		std::vector<llvm::Instruction*> insns;
+		std::vector<llvm::Instruction*> loads;
 
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
@@ -68,14 +69,21 @@ struct Prefetcher : public FunctionPass {
 					errs() << I << '\n';
 					insns.push_back(&I);
 				}
+
+				if (I.getOpcode() == Instruction::Load) {
+					errs() << I << '\n';
+					loads.push_back(&I);
+				}
 			}
 		}
 
+
+		// Replace DI with Chris's DDGraphPass
 		if (insns.size() > 0) {
 
 			for (int i = 0; i < insns.size() -1; ++i) {
-				if (DI.depends(insns.at(i), insns.at(i+1), true) ||
-						DI.depends(insns.at(i+1), insns.at(i), true)) {
+				if (DI.depends((llvm::Instruction*)insns.at(i), (llvm::Instruction*)insns.at(i+1), true) ||
+						DI.depends((llvm::Instruction*)insns.at(i+1), (llvm::Instruction*)insns.at(i), true)) {
 					errs() << "GEP DEPENDENCE!" << "\n";
 				}
 				else {
@@ -83,6 +91,54 @@ struct Prefetcher : public FunctionPass {
 				}
 
 				// identify if GEP depends on another GEP
+			}
+		}
+
+		// Identify if GEP depends on another GEP
+		// Replace DI with Chris's DDGraphPass
+		if (loads.size() > 0) {
+
+			for (int i = 0; i < loads.size() -1; ++i) {
+				if (DI.depends((llvm::Instruction*)loads.at(i), (llvm::Instruction*)loads.at(i+1), true) ||
+						DI.depends((llvm::Instruction*)loads.at(i+1), (llvm::Instruction*)loads.at(i), true)) {
+					errs() << "LOAD DEPENDENCE!" << "\n";
+				}
+				else {
+					errs() << "NO LOAD DEPENDENCE!\n" << "\n";
+				}
+			}
+		}
+//       SSA Form - mem2reg
+//		  void visitInstruction(llvm::Instruction &CurI) {
+//		    if (shouldSkip(CurI)) {
+//		      return;
+//		    }
+//
+//		    for (auto &u : CurI.uses()) {
+//		      auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+//		      if (user && !shouldSkip(user)) {
+//		        auto src = Graph->getOrInsertNode(&CurI);
+//		        auto dst = Graph->getOrInsertNode(user);
+//		        src->addDependentNode(dst, {DO_Data, DH_Flow});
+//		      }
+//		    }
+//		}
+
+		// Identify if Load depends on GEP
+		// Replace DI with Chris's DDGraphPass
+		if (loads.size() > 0 && insns.size() > 0) {
+			for (int i = 0; i < loads.size(); ++i) {
+				for (int j = 0; j < insns.size(); ++j) {
+					if (DI.depends((llvm::Instruction*)loads[i], (llvm::Instruction*)insns[j], true) ||
+							DI.depends((llvm::Instruction*)insns[j], (llvm::Instruction*)loads[i], true)) {
+						errs() << "LOAD DEPENDENDS ON GEP!" << "\n";
+					}
+					else {
+						errs() << "NO LOAD ON GEP DEPENDENCE!\n" << "\n";
+					}
+
+					// identify if GEP depends on another GEP
+				}
 			}
 		}
 		return false;
