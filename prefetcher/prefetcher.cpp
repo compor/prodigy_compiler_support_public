@@ -134,10 +134,10 @@ struct Prefetcher : public FunctionPass {
 
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
-                errs() << "I  :" << I << "\n";
+                //errs() << "I  :" << I << "\n";
 				if (I.getOpcode() == Instruction::GetElementPtr) {
 					insns.push_back(&I);
-                    errs() << "ins:" << I << "\n";
+                    //errs() << "ins:" << I << "\n";
 				}
 
 				if (I.getOpcode() == Instruction::Load) {
@@ -203,24 +203,68 @@ struct Prefetcher : public FunctionPass {
 
 		return false;
 	}
+    
+    struct myAllocCallInfo {
+        std::vector<llvm::Instruction*> allocInst;
+        std::vector<llvm::Value*> inputArgument;
+    };
+
+    myAllocCallInfo
+    identifyAlloc(Function &F) 
+    {
+        myAllocCallInfo allocInfo;
+		for (llvm::BasicBlock &BB : F) {
+			for (llvm::Instruction &I : BB) {
+				CallSite CS(&I);
+				if (!CS.getInstruction()) {
+					continue;
+				}
+				Value *called = CS.getCalledValue()->stripPointerCasts();
+
+				if (llvm::Function *f = dyn_cast<Function>(called)) {
+					if (f->getName().equals("myIntMallocFn32")) {
+                        //errs() << "Alloc: " << I << "\n";
+                        //errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+                        allocInfo.allocInst.push_back(&I);
+                        allocInfo.inputArgument.push_back(CS.getArgOperand(0));
+                    }
+                }
+            }
+        }
+        return allocInfo;
+    }
+
+    // ***** helper function to print vector of basic blocks ****** //
+    // This version of the function takes a vector of T* as input
+    template<typename T>
+    void
+    printVector(std::string inStr, std::vector<T*> inVector) {
+        errs() << inStr << ": < ";
+        for(auto it = inVector.begin(); it != inVector.end(); ++it) {
+            errs() << **it << " ";
+        }
+        errs() << ">\n";
+    }
 
 	bool runOnFunction(Function &F) override {
+        
+        myAllocCallInfo allocInfo;
 		//LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
 		//		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
 		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
-        errs() << "------\n";
-		errs() << "\n --- \n" << F.getName() << "\n --- \n";
-		//for (llvm::BasicBlock &BB : F) {
-		//	for (llvm::Instruction &I : BB) {
-        //        errs() << "I: " << I << "\n"; 
-        //    }
-        //}
-        errs() << "------\n";
 
 		//MSSA.print(errs());
 
 		//		errs() << "Prefetcher: ";
 		//		errs().write_escaped(F.getName()) << '\n';
+        
+        allocInfo = identifyAlloc(F);
+        if(!allocInfo.allocInst.empty()) {
+		    errs() << "\n --- \n" << F.getName() << "\n --- \n";
+            printVector("startPointers", allocInfo.allocInst);
+            printVector("sizeOfArray", allocInfo.inputArgument);
+            errs() << "\n";
+        }
 
 		identifyGEPDependence(F, DI);
 		//identifyMemoryAllocations(F);
