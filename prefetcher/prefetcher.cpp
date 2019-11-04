@@ -134,8 +134,14 @@ struct Prefetcher : public FunctionPass {
 
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
+                //errs() << "I  :" << I << "\n";
 				if (I.getOpcode() == Instruction::GetElementPtr) {
 					insns.push_back(&I);
+                    //errs() << "ins:" << I << "\n";
+				}
+
+				if (I.getOpcode() == Instruction::Load) {
+					loads.push_back(&I);
 				}
 
 				if (I.getOpcode() == Instruction::Load) {
