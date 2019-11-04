@@ -56,15 +56,19 @@ struct Prefetcher : public FunctionPass {
 		AU.addRequired<DependenceAnalysisWrapperPass>();
 	}
 
-	bool printAll(Function &F) {
-		for (llvm::BasicBlock &BB : F) {
-			for (llvm::Instruction &I : BB) {
-				errs() << I << '\n'; // I.getOpcodeName()
-			}
-		}
+    // ***** helper function to print vectors ****** //
+    // This version of the function takes a vector of T* as input
+    template<typename T>
+    void
+    printVector(std::string inStr, std::vector<T*> inVector) {
+        errs() << inStr << ": < ";
+        for(auto it = inVector.begin(); it != inVector.end(); ++it) {
+            errs() << **it << " ";
+        }
+        errs() << ">\n";
+    }
 
-		return false;
-	}
+    /* GEP DEPENDENCE */
 
 	bool usedInLoad(llvm::Instruction *I) {
 		for (auto &u: I->uses()) {
@@ -78,53 +82,21 @@ struct Prefetcher : public FunctionPass {
 		return false;
 	}
 
-	bool recurseUsesSilent(llvm::Instruction &I) {
+	bool recurseUsesSilent(llvm::Instruction &I, std::vector<llvm::Instruction*> &uses) {
 		bool ret = false;
 
 		for (auto &u: I.uses()) {
 			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
 			if (user->getOpcode() == Instruction::GetElementPtr) {
-				return true;
+				ret = true;
+				uses.push_back(user);
 			}
 
-			ret = recurseUsesSilent(*user);
+			ret |= recurseUsesSilent(*user,uses);
 		}
 
 		return ret;
-	}
-	
-    llvm::Instruction* 
-    recurseUsesSilent(llvm::Instruction &I, bool returnUser) {
-
-		for (auto &u: I.uses()) {
-			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
-
-			if(user->getOpcode() == Instruction::GetElementPtr) {
-                return user;
-			}
-
-			llvm::Instruction* userInst = recurseUsesSilent(*user, true);
-            if(userInst != nullptr) {
-                return userInst;
-            }
-		}
-
-		return nullptr;
-	}
-
-	bool recurseUses(llvm::Instruction &I) {
-		for (auto &u: I.uses()) {
-			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
-
-			if (user->getOpcode() == Instruction::GetElementPtr) {
-				errs() << *user << "\n";
-			}
-
-			recurseUses(*user);
-		}
-
-		return false;
 	}
 
 	bool identifyGEPDependence(Function &F, DependenceInfo & DI) {
@@ -157,14 +129,16 @@ struct Prefetcher : public FunctionPass {
                     // recurseUsesSilent() finds if the GEP instruction is 
                     //                     *eventually* used in another GEP instruction
                     // can detect loads of type A[B[i]] 
-                    // and does not detect stores of type A[B[i]] 
-					if(usedInLoad(I) 
-                       && recurseUsesSilent(*I)  
-                       && recurseUsesSilent(*I, true) != nullptr  
-                       && usedInLoad(recurseUsesSilent(*I, true))) { 
+                    // and does not detect stores of type A[B[i]]
+
+					std::vector<llvm::Instruction*> uses;
+
+					if(usedInLoad(I)
+                       && recurseUsesSilent(*I,uses)
+                       && usedInLoad(I)) {
 						    errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-						    errs() << *I << "\n  is used by:\n";
-						    recurseUses(*I);
+						    errs() << *I;
+						    printVector("\n  is used by:\n", uses);
 						    errs() << "\n";
                         
 					}
@@ -174,6 +148,10 @@ struct Prefetcher : public FunctionPass {
 
 		return false;
 	}
+
+	/* End GEP Dependence */
+
+	/* Identify Standard malloc */
 
 	bool identifyMemoryAllocations(Function & F) {
 
@@ -190,24 +168,22 @@ struct Prefetcher : public FunctionPass {
 				if (llvm::Function *f = dyn_cast<Function>(called)) {
 					if (f->getName().equals("calloc")) {
 						malloc_present = true;
-						//errs() << "  Insert code to write to Node table: resulting ptr of calloc, num elements: << *(I.getOperand(0)), size of element: << *(I.getOperand(1)) \n";
 					}
 					else if (f->getName().equals("malloc")) {
 						malloc_present = true;
-						//errs() << "  Insert code to write to Node table: resulting ptr of malloc, size: << *(I.getOperand(0)), size of element: might be able to get this using LLVM type information, otherwise speculate - 4 bytes? \n";
 					}
 				}
 				// Check for other allocation functions - C++ new, etc.
 			}
 		}
 
-		if (malloc_present == true) {
-			//errs() << "  Select and emit trigger node\n";
-		}
-
 		return false;
 	}
     
+	/* End Identify Standard malloc */
+
+	/* Identify Custom malloc */
+
     struct myAllocCallInfo {
         std::vector<llvm::Instruction*> allocInst;
         std::vector<llvm::Value*> inputArgument;
@@ -238,30 +214,13 @@ struct Prefetcher : public FunctionPass {
         return allocInfo;
     }
 
-    // ***** helper function to print vector of basic blocks ****** //
-    // This version of the function takes a vector of T* as input
-    template<typename T>
-    void
-    printVector(std::string inStr, std::vector<T*> inVector) {
-        errs() << inStr << ": < ";
-        for(auto it = inVector.begin(); it != inVector.end(); ++it) {
-            errs() << **it << " ";
-        }
-        errs() << ">\n";
-    }
+    /* End identify Custom malloc */
 
 	bool runOnFunction(Function &F) override {
         
         myAllocCallInfo allocInfo;
-		//LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-		//		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
 		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
 
-		//MSSA.print(errs());
-
-		//		errs() << "Prefetcher: ";
-		//		errs().write_escaped(F.getName()) << '\n';
-        
         allocInfo = identifyAlloc(F);
         if(!allocInfo.allocInst.empty()) {
 		    errs() << "\n --- \n" << F.getName() << "\n --- \n";
@@ -271,8 +230,6 @@ struct Prefetcher : public FunctionPass {
         }
 
 		identifyGEPDependence(F, DI);
-		//identifyMemoryAllocations(F);
-		//		printAll(F);
 
 		return false;
 	}
