@@ -177,14 +177,9 @@ struct Prefetcher : public FunctionPass {
 	}
 
 	bool runOnFunction(Function &F) override {
-		//LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
-		//		MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
+		// LoopInfo &LI = getAnalysis<LoopInfoWrapperPass>().getLoopInfo();
+		// MemorySSA &MSSA = getAnalysis<MemorySSAWrapperPass>().getMSSA();
 		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
-
-		//MSSA.print(errs());
-
-		//		errs() << "Prefetcher: ";
-		//		errs().write_escaped(F.getName()) << '\n';
 
 		identifyGEPDependence(F, DI);
 		identifyMemoryAllocations(F);
