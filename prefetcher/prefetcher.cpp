@@ -16,6 +16,8 @@
 
 #include <cxxabi.h>
 
+#include "pf_interface.h"
+
 using namespace llvm;
 
 namespace {
@@ -222,16 +224,25 @@ struct Prefetcher : public FunctionPass {
 	// Example function for inserting llvm instructions
 	bool addOne(Function &F) {
 		for (llvm::BasicBlock &BB : F) {
+
+			/* This might do something on code that has the prefetcher headers included. It won't work for code that doesn't.
+			 * We need to somehow compile the headers for sniper (pf_interface.h) and link them in.
+			 */
+			llvm::IRBuilder<> Builder(&BB);
+			CallInst * callTwo = Builder.CreateCall(F.getParent()->getFunction("RegisterNode"));
+
+
+			/* Insert a lot of instructions */
 			for (llvm::Instruction &I : BB) {
-//				auto * ai = new AllocaInst(llvm::Type::Int32Ty);
-//				auto *pa = new AllocaInst(llvm::Type::Int32Ty);
 				llvm::IRBuilder<> Builder(&I);
 
 				for (int i = 0; i < 100; ++i) {
 					AllocaInst * callOne = Builder.CreateAlloca(Type::getInt32Ty(F.getContext()));
+					// Figure out how to add pf calls into the context
 				}
 			}
 		}
+
 		return true;
 	}
 

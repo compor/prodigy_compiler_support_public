@@ -10,5 +10,6 @@ message(STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}")
 
 add_definitions(${LLVM_DEFINITIONS})
 include_directories(${LLVM_INCLUDE_DIRS})
+include_directories(../sniper6.1/include/)
 
 add_subdirectory(prefetcher)
