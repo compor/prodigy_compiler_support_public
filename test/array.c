@@ -20,6 +20,11 @@ void initialize(uint32_t * a, int size)
 	}
 }
 
+void test(uint32_t * a, uint32_t * b, uint32_t *c)
+{
+    c[0] = a[0];
+}
+
 int main(/*int argc, char * argv[]*/)
 {
     int size0 = 5, size1 = 5;

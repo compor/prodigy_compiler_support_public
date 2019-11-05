@@ -10,6 +10,8 @@
 #include "llvm/Analysis/MemorySSA.h"
 #include "llvm/Analysis/DependenceAnalysis.h"
 
+#include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/Type.h"
 #include <vector>
 
 #include <cxxabi.h>
@@ -56,19 +58,19 @@ struct Prefetcher : public FunctionPass {
 		AU.addRequired<DependenceAnalysisWrapperPass>();
 	}
 
-    // ***** helper function to print vectors ****** //
-    // This version of the function takes a vector of T* as input
-    template<typename T>
-    void
-    printVector(std::string inStr, std::vector<T*> inVector) {
-        errs() << inStr << ": < ";
-        for(auto it = inVector.begin(); it != inVector.end(); ++it) {
-            errs() << **it << " ";
-        }
-        errs() << ">\n";
-    }
+	// ***** helper function to print vectors ****** //
+	// This version of the function takes a vector of T* as input
+	template<typename T>
+	void
+	printVector(std::string inStr, std::vector<T*> inVector) {
+		errs() << inStr << ": < ";
+		for(auto it = inVector.begin(); it != inVector.end(); ++it) {
+			errs() << **it << " ";
+		}
+		errs() << ">\n";
+	}
 
-    /* GEP DEPENDENCE */
+	/* GEP DEPENDENCE */
 
 	bool usedInLoad(llvm::Instruction *I) {
 		for (auto &u: I->uses()) {
@@ -106,10 +108,10 @@ struct Prefetcher : public FunctionPass {
 
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
-                //errs() << "I  :" << I << "\n";
+				//errs() << "I  :" << I << "\n";
 				if (I.getOpcode() == Instruction::GetElementPtr) {
 					insns.push_back(&I);
-                    //errs() << "ins:" << I << "\n";
+					//errs() << "ins:" << I << "\n";
 				}
 
 				if (I.getOpcode() == Instruction::Load) {
@@ -125,22 +127,21 @@ struct Prefetcher : public FunctionPass {
 		if (insns.size() > 0) {
 			for (auto I : insns) {
 				if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
-                    // usedInLoad()        finds if a GEP instruction is used in load
-                    // recurseUsesSilent() finds if the GEP instruction is 
-                    //                     *eventually* used in another GEP instruction
-                    // can detect loads of type A[B[i]] 
-                    // and does not detect stores of type A[B[i]]
+					// usedInLoad()        finds if a GEP instruction is used in load
+					// recurseUsesSilent() finds if the GEP instruction is
+					//                     *eventually* used in another GEP instruction
+					// can detect loads of type A[B[i]]
+					// and does not detect stores of type A[B[i]]
 
 					std::vector<llvm::Instruction*> uses;
 
 					if(usedInLoad(I)
-                       && recurseUsesSilent(*I,uses)
-                       && usedInLoad(I)) {
-						    errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-						    errs() << *I;
-						    printVector("\n  is used by:\n", uses);
-						    errs() << "\n";
-                        
+							&& recurseUsesSilent(*I,uses)) {
+						errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+						errs() << *I;
+						printVector("\n  is used by:\n", uses);
+						errs() << "\n";
+
 					}
 				}
 			}
@@ -179,20 +180,20 @@ struct Prefetcher : public FunctionPass {
 
 		return false;
 	}
-    
+
 	/* End Identify Standard malloc */
 
 	/* Identify Custom malloc */
 
-    struct myAllocCallInfo {
-        std::vector<llvm::Instruction*> allocInst;
-        std::vector<llvm::Value*> inputArgument;
-    };
+	struct myAllocCallInfo {
+		std::vector<llvm::Instruction*> allocInst;
+		std::vector<llvm::Value*> inputArgument;
+	};
 
-    myAllocCallInfo
-    identifyAlloc(Function &F) 
-    {
-        myAllocCallInfo allocInfo;
+	myAllocCallInfo
+	identifyAlloc(Function &F)
+	{
+		myAllocCallInfo allocInfo;
 		for (llvm::BasicBlock &BB : F) {
 			for (llvm::Instruction &I : BB) {
 				CallSite CS(&I);
@@ -203,34 +204,53 @@ struct Prefetcher : public FunctionPass {
 
 				if (llvm::Function *f = dyn_cast<Function>(called)) {
 					if (f->getName().equals("myIntMallocFn32")) {
-                        //errs() << "Alloc: " << I << "\n";
-                        //errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-                        allocInfo.allocInst.push_back(&I);
-                        allocInfo.inputArgument.push_back(CS.getArgOperand(0));
-                    }
-                }
-            }
-        }
-        return allocInfo;
-    }
+						//errs() << "Alloc: " << I << "\n";
+						//errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+						allocInfo.allocInst.push_back(&I);
+						allocInfo.inputArgument.push_back(CS.getArgOperand(0));
+					}
+				}
+			}
+		}
+		return allocInfo;
+	}
 
-    /* End identify Custom malloc */
+	/* End identify Custom malloc */
+
+	/* Test */
+
+	// Example function for inserting llvm instructions
+	bool addOne(Function &F) {
+		for (llvm::BasicBlock &BB : F) {
+			for (llvm::Instruction &I : BB) {
+//				auto * ai = new AllocaInst(llvm::Type::Int32Ty);
+//				auto *pa = new AllocaInst(llvm::Type::Int32Ty);
+				llvm::IRBuilder<> Builder(&I);
+
+				for (int i = 0; i < 100; ++i) {
+					AllocaInst * callOne = Builder.CreateAlloca(Type::getInt32Ty(F.getContext()));
+				}
+			}
+		}
+		return true;
+	}
 
 	bool runOnFunction(Function &F) override {
-        
-        myAllocCallInfo allocInfo;
+
+		myAllocCallInfo allocInfo;
 		DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
 
-        allocInfo = identifyAlloc(F);
-        if(!allocInfo.allocInst.empty()) {
-		    errs() << "\n --- \n" << F.getName() << "\n --- \n";
-            printVector("startPointers", allocInfo.allocInst);
-            printVector("sizeOfArray", allocInfo.inputArgument);
-            errs() << "\n";
-        }
+		allocInfo = identifyAlloc(F);
+		if(!allocInfo.allocInst.empty()) {
+			errs() << "\n --- \n" << F.getName() << "\n --- \n";
+			printVector("startPointers", allocInfo.allocInst);
+			printVector("sizeOfArray", allocInfo.inputArgument);
+			errs() << "\n";
+		}
 
 		identifyGEPDependence(F, DI);
 
+//		addOne(F);
 		return false;
 	}
 };
@@ -240,4 +260,4 @@ char Prefetcher::ID = 0; // Initialization value not important
 
 static RegisterPass<Prefetcher> X("prefetcher", "Prefetcher Pass",
 		false, /* Only looks at CFG */
-		true /* Analysis Pass */);
+		false /* Analysis Pass */);
