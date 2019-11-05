@@ -16,7 +16,7 @@
 
 #include <cxxabi.h>
 
-#include "pf_interface.h"
+//#include "pf_interface.h"
 
 using namespace llvm;
 
@@ -136,14 +136,20 @@ struct Prefetcher : public FunctionPass {
 					// and does not detect stores of type A[B[i]]
 
 					std::vector<llvm::Instruction*> uses;
+                    std::vector<std::pair<llvm::Instruction*, llvm::Instruction*>> dependentGPEs;
 
 					if(usedInLoad(I)
-							&& recurseUsesSilent(*I,uses)) {
-						errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-						errs() << *I;
-						printVector("\n  is used by:\n", uses);
-						errs() << "\n";
-
+					        && recurseUsesSilent(*I,uses)) 
+                    {
+                        for(auto U : uses) {
+                            if(usedInLoad(U)) {
+						        errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+						        errs() << *I;
+						        printVector("\n  is used by:\n", uses);
+						        errs() << "\n";
+                                dependentGPEs.push_back(std::make_pair(I, U));
+                            }
+                        }
 					}
 				}
 			}
