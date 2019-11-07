@@ -18,5 +18,14 @@ inline std::string demangle(const char* name)
 	return (status == 0) ? res.get() : std::string(name);
 }
 
+llvm::Function* getFunctionFromInst(llvm::Instruction &I, std::string s)
+{
+	llvm::BasicBlock * B = I.getParent();
+	llvm::Function * F = B->getParent();
+	llvm::Module * M = F->getParent();
+	llvm::Function * R = M->getFunction(s);
+	return R;
+}
+
 
 #endif /* PREFETCHER_UTIL_HPP_ */
