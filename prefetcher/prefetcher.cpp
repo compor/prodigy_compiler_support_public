@@ -1,3 +1,4 @@
+// LLVM Headers
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/raw_ostream.h"
@@ -12,11 +13,12 @@
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Type.h"
+
+// Project headers
+#include "util.hpp"
+
+// Standard libs
 #include <vector>
-
-#include <cxxabi.h>
-
-//#include "pf_interface.h"
 
 using namespace llvm;
 
@@ -40,14 +42,6 @@ static RegisterPass<Prefetcher_Module> Y("prefetcher_module", "Module Prefetcher
 		false, /* Only looks at CFG */
 		true /* Analysis Pass */);
 
-
-inline std::string demangle(const char* name)
-{
-	int status = -1;
-
-	std::unique_ptr<char, void(*)(void*)> res { abi::__cxa_demangle(name, NULL, NULL, &status), std::free };
-	return (status == 0) ? res.get() : std::string(name);
-}
 
 namespace {
 struct Prefetcher : public FunctionPass {
