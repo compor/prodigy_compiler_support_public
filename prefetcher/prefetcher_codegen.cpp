@@ -105,7 +105,10 @@ const std::vector<std::string> PrefetcherRuntime::Functions = {
 class PrefetcherCodegen {
   llvm::Module *Mod;
 
-  void insert() {
+public:
+  PrefetcherCodegen(llvm::Module &M) : Mod(&M){};
+
+  void DeclareRuntime() {
     for (auto e : PrefetcherRuntime::Functions) {
       auto *funcType = llvm::FunctionType::get(
           llvm::Type::getInt32Ty(Mod->getContext()), true);
@@ -118,9 +121,6 @@ class PrefetcherCodegen {
 
     return;
   }
-
-public:
-  PrefetcherCodegen(llvm::Module &M) : Mod(&M) { insert(); };
 };
 
 //
@@ -163,10 +163,14 @@ static llvm::RegisterStandardPasses
 //
 
 bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
-  bool hasModuleChanged = false;
+  bool hasModuleChanged = true;
 
   PrefetcherCodegen pfcg(CurMod);
-  hasModuleChanged = true;
+  pfcg.DeclareRuntime();
+
+  for(auto &curFunc : CurMod) {
+    ;
+  }
 
   return hasModuleChanged;
 }
