@@ -97,7 +97,7 @@ struct Prefetcher : public FunctionPass {
 		return ret;
 	}
 
-	bool identifyGEPDependence(Function &F, DependenceInfo & DI) {
+	std::vector<std::pair<llvm::Instruction*, llvm::Instruction*>> identifyGEPDependence(Function &F, DependenceInfo & DI) {
 
 		std::vector<llvm::Instruction*> insns;
 		std::vector<llvm::Instruction*> loads;
@@ -120,6 +120,8 @@ struct Prefetcher : public FunctionPass {
 			}
 		}
 
+        std::vector<std::pair<llvm::Instruction*, llvm::Instruction*>> dependentGEPs;
+
 		if (insns.size() > 0) {
 			for (auto I : insns) {
 				if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
@@ -130,7 +132,6 @@ struct Prefetcher : public FunctionPass {
 					// and does not detect stores of type A[B[i]]
 
 					std::vector<llvm::Instruction*> uses;
-                    std::vector<std::pair<llvm::Instruction*, llvm::Instruction*>> dependentGPEs;
 
 					if(usedInLoad(I)
 					        && recurseUsesSilent(*I,uses)) 
@@ -141,7 +142,7 @@ struct Prefetcher : public FunctionPass {
 						        errs() << *I;
 						        printVector("\n  is used by:\n", uses);
 						        errs() << "\n";
-                                dependentGPEs.push_back(std::make_pair(I, U));
+                                dependentGEPs.push_back(std::make_pair(I, U));
                             }
                         }
 					}
@@ -149,7 +150,7 @@ struct Prefetcher : public FunctionPass {
 			}
 		}
 
-		return false;
+		return dependentGEPs;
 	}
 
 	/* End GEP Dependence */
