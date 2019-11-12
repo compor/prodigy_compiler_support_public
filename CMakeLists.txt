@@ -13,3 +13,4 @@ include_directories(${LLVM_INCLUDE_DIRS})
 include_directories(../sniper6.1/include/)
 
 add_subdirectory(prefetcher)
+add_subdirectory(runtime)
