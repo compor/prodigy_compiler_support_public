@@ -108,7 +108,7 @@ class PrefetcherCodegen {
   void insert() {
     for (auto e : PrefetcherRuntime::Functions) {
       auto *funcType = llvm::FunctionType::get(
-          llvm::Type::getVoidTy(Mod->getContext()), true);
+          llvm::Type::getInt32Ty(Mod->getContext()), true);
 
       Mod->getOrInsertFunction(e, funcType);
       DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs()
