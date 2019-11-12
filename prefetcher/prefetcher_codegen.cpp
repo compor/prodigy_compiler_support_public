@@ -49,14 +49,49 @@
 // using DEBUG macro
 // using llvm::dbgs
 
+#include <vector>
+// using std::vector
+
 #include <string>
 // using std::string
 
-#define DEBUG_TYPE "prefetcher_codegen"
+#define DEBUG_TYPE "prefetcher-codegen"
 
 // plugin registration for opt
 
 namespace {
+
+struct PrefetcherRuntime {
+  static constexpr char *SimRoiStart = "sim_roi_start";
+  static constexpr char *SimRoiEnd = "sim_roi_end";
+
+  static const std::vector<std::string> Functions;
+};
+
+const std::vector<std::string> PrefetcherRuntime::Functions = {
+    PrefetcherRuntime::SimRoiStart, PrefetcherRuntime::SimRoiEnd};
+
+class PrefetcherCodegen {
+  llvm::Module *Mod;
+
+  void insert() {
+    for (auto e : PrefetcherRuntime::Functions) {
+      auto *funcType = llvm::FunctionType::get(
+          llvm::Type::getVoidTy(Mod->getContext()), true);
+
+      Mod->getOrInsertFunction(e, funcType);
+      LLVM_DEBUG(llvm::dbgs() << "adding func << " << e << " to module "
+                              << Mod->getName() << "\n");
+    }
+
+    return;
+  }
+
+public:
+  PrefetcherCodegen(llvm::Module &M) : Mod(&M) { insert(); };
+};
+
+//
 
 class PrefetcherCodegenPass : public llvm::ModulePass {
 public:
@@ -97,6 +132,9 @@ static llvm::RegisterStandardPasses
 
 bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   bool hasModuleChanged = false;
+
+  PrefetcherCodegen pfcg(CurMod);
+  hasModuleChanged = true;
 
   return hasModuleChanged;
 }
