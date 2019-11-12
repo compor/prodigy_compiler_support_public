@@ -110,7 +110,7 @@ class PrefetcherCodegen {
 public:
   PrefetcherCodegen(llvm::Module &M) : Mod(&M){};
 
-  void DeclareRuntime() {
+  void declareRuntime() {
     for (auto e : PrefetcherRuntime::Functions) {
       auto *funcType = llvm::FunctionType::get(
           llvm::Type::getInt32Ty(Mod->getContext()), true);
@@ -122,6 +122,24 @@ public:
     }
 
     return;
+  }
+
+  void emitRegisterNode(myAllocCallInfo &AI) {
+    if (auto *func =
+            Mod->getFunction(PrefetcherRuntime::RegisterNodeWithSize)) {
+      llvm::SmallVector<llvm::Value *, 4> args;
+
+      args.push_back(AI.allocInst.back());
+      args.append(AI.inputArgument.begin(), AI.inputArgument.end());
+
+      // TODO change 0 to based on a node counter
+      args.push_back(llvm::ConstantInt::get(
+          llvm::IntegerType::get(Mod->getContext(), 32), 0));
+
+      auto *insertPt = AI.allocInst.back()->getParent()->getTerminator();
+      auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+                                          args, "", insertPt);
+    }
   }
 };
 
@@ -168,10 +186,14 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   bool hasModuleChanged = true;
 
   PrefetcherCodegen pfcg(CurMod);
-  pfcg.DeclareRuntime();
+  pfcg.declareRuntime();
 
-  for(auto &curFunc : CurMod) {
+  for (auto &curFunc : CurMod) {
     auto ai = identifyAlloc(curFunc);
+
+    if (ai.allocInst.size()) {
+      pfcg.emitRegisterNode(ai);
+    }
   }
 
   return hasModuleChanged;
