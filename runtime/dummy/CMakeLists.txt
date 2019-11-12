@@ -1,6 +1,6 @@
 # cmake file
 
-set(PRJ_RT_NAME prefetcher_default_rt)
+set(PRJ_RT_NAME prefetcher_dummy_rt)
 
 set(SOURCES ${PRJ_RT_NAME}.cpp)
 
