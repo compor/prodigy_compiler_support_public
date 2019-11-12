@@ -62,14 +62,45 @@
 namespace {
 
 struct PrefetcherRuntime {
+  static constexpr char *CreateParams = "create_params";
+  static constexpr char *CreateEnable = "create_enable";
+  static constexpr char *RegisterNode = "register_node";
+  static constexpr char *RegisterNodeWithSize = "register_node_with_size";
+  static constexpr char *RegisterTravEdge1 = "register_trav_edge1";
+  static constexpr char *RegisterTravEdge2 = "register_trav_edge2";
+  static constexpr char *RegisterTrigEdge1 = "register_trig_edge1";
+  static constexpr char *RegisterTrigEdge2 = "register_trig_edge2";
+  static constexpr char *SimUserPfSetParam = "sim_user_pf_set_param";
+  static constexpr char *SimUserPfSetEnable = "sim_user_pf_set_enable";
+  static constexpr char *SimUserPfEnable = "sim_user_pf_enable";
+  static constexpr char *SimUserWait = "sim_user_wait";
   static constexpr char *SimRoiStart = "sim_roi_start";
   static constexpr char *SimRoiEnd = "sim_roi_end";
+  static constexpr char *SimUserPfDisable = "sim_user_pf_disable";
+  static constexpr char *DeleteParams = "delete_params";
+  static constexpr char *DeleteEnable = "delete_enable";
 
   static const std::vector<std::string> Functions;
 };
 
 const std::vector<std::string> PrefetcherRuntime::Functions = {
-    PrefetcherRuntime::SimRoiStart, PrefetcherRuntime::SimRoiEnd};
+    PrefetcherRuntime::CreateParams,
+    PrefetcherRuntime::CreateEnable,
+    PrefetcherRuntime::RegisterNode,
+    PrefetcherRuntime::RegisterNodeWithSize,
+    PrefetcherRuntime::RegisterTravEdge1,
+    PrefetcherRuntime::RegisterTravEdge2,
+    PrefetcherRuntime::RegisterTrigEdge1,
+    PrefetcherRuntime::RegisterTrigEdge2,
+    PrefetcherRuntime::SimUserPfSetParam,
+    PrefetcherRuntime::SimUserPfSetEnable,
+    PrefetcherRuntime::SimUserPfEnable,
+    PrefetcherRuntime::SimUserWait,
+    PrefetcherRuntime::SimRoiStart,
+    PrefetcherRuntime::SimRoiEnd,
+    PrefetcherRuntime::SimUserPfDisable,
+    PrefetcherRuntime::DeleteParams,
+    PrefetcherRuntime::DeleteEnable};
 
 class PrefetcherCodegen {
   llvm::Module *Mod;
