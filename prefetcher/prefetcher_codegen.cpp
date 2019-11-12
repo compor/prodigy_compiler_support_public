@@ -55,6 +55,8 @@
 #include <string>
 // using std::string
 
+#include "prefetcher.hpp"
+
 #define DEBUG_TYPE "prefetcher-codegen"
 
 // plugin registration for opt
@@ -169,7 +171,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   pfcg.DeclareRuntime();
 
   for(auto &curFunc : CurMod) {
-    ;
+    auto ai = identifyAlloc(curFunc);
   }
 
   return hasModuleChanged;

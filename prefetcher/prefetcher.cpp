@@ -23,19 +23,47 @@
 
 using namespace llvm;
 
+/* Identify Custom malloc */
+
+// struct myAllocCallInfo {
+// std::vector<llvm::Instruction*> allocInst;
+// std::vector<llvm::Value*> inputArgument;
+//};
+
+myAllocCallInfo identifyAlloc(Function &F) {
+  myAllocCallInfo allocInfo;
+  for (llvm::BasicBlock &BB : F) {
+    for (llvm::Instruction &I : BB) {
+      CallSite CS(&I);
+      if (!CS.getInstruction()) {
+        continue;
+      }
+      Value *called = CS.getCalledValue()->stripPointerCasts();
+
+      if (llvm::Function *f = dyn_cast<Function>(called)) {
+        if (f->getName().equals("myIntMallocFn32")) {
+          // errs() << "Alloc: " << I << "\n";
+          // errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+          allocInfo.allocInst.push_back(&I);
+          allocInfo.inputArgument.push_back(CS.getArgOperand(0));
+        }
+      }
+    }
+  }
+  return allocInfo;
+}
+
+/* End identify Custom malloc */
+
 namespace {
 
-
 struct Prefetcher_Module : public ModulePass {
-	static char ID;
-	Prefetcher_Module() :ModulePass(ID) {}
+  static char ID;
+  Prefetcher_Module() : ModulePass(ID) {}
 
-	bool runOnModule(Module & M) override {
-
-		return false;
-	}
+  bool runOnModule(Module &M) override { return false; }
 };
-}
+} // namespace
 
 char Prefetcher_Module::ID = 0; // Initialization value not important
 
