@@ -16,6 +16,7 @@
 
 // Project headers
 #include "util.hpp"
+#include "prefetcher.hpp"
 
 // Standard libs
 #include <vector>
@@ -188,10 +189,10 @@ struct Prefetcher : public FunctionPass {
 
 	/* Identify Custom malloc */
 
-	struct myAllocCallInfo {
-		std::vector<llvm::Instruction*> allocInst;
-		std::vector<llvm::Value*> inputArgument;
-	};
+	//struct myAllocCallInfo {
+		//std::vector<llvm::Instruction*> allocInst;
+		//std::vector<llvm::Value*> inputArgument;
+	//};
 
 	myAllocCallInfo
 	identifyAlloc(Function &F)
