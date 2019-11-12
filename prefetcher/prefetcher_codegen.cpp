@@ -80,8 +80,8 @@ class PrefetcherCodegen {
           llvm::Type::getVoidTy(Mod->getContext()), true);
 
       Mod->getOrInsertFunction(e, funcType);
-      LLVM_DEBUG(llvm::dbgs() << "adding func << " << e << " to module "
-                              << Mod->getName() << "\n");
+//      LLVM_DEBUG(llvm::dbgs() << "adding func << " << e << " to module "
+//                              << Mod->getName() << "\n");
     }
 
     return;
