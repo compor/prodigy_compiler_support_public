@@ -17,8 +17,8 @@ class Instruction;
 }; // namespace llvm
 
 struct myAllocCallInfo {
-  std::vector<llvm::Instruction *> allocInst;
-  std::vector<llvm::Value *> inputArgument;
+  llvm::Instruction * allocInst;
+  std::vector<llvm::Value *> inputArguments;
 };
 
 myAllocCallInfo identifyAlloc(llvm::Function &F);

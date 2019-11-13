@@ -30,8 +30,8 @@ using namespace llvm;
 // std::vector<llvm::Value*> inputArgument;
 //};
 
-myAllocCallInfo identifyAlloc(Function &F) {
-  myAllocCallInfo allocInfo;
+std::vector<myAllocCallInfo> identifyAlloc(Function &F) {
+  std::vector<myAllocCallInfo> alloc_info_vec;
   for (llvm::BasicBlock &BB : F) {
     for (llvm::Instruction &I : BB) {
       CallSite CS(&I);
@@ -44,13 +44,15 @@ myAllocCallInfo identifyAlloc(Function &F) {
         if (f->getName().equals("myIntMallocFn32")) {
           // errs() << "Alloc: " << I << "\n";
           // errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-          allocInfo.allocInst.push_back(&I);
-          allocInfo.inputArgument.push_back(CS.getArgOperand(0));
+          myAllocCallInfo allocInfo;
+          allocInfo.allocInst = &I;
+          allocInfo.inputArguments.insert(allocInfo.inputArguments.back(), CS.args().begin(), CS.args().end());
+          alloc_info_vec.push_back(allocInfo);
         }
       }
     }
   }
-  return allocInfo;
+  return alloc_info_vec;
 }
 
 /* End identify Custom malloc */
