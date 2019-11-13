@@ -1,0 +1,55 @@
+Ranged Indirection Pass for BFS
+Written by Tarunesh Verma (tarunesh@umich.edu)
+11-13-2019
+
+Files included
+  Ranged Indirection Pass - put these in LLVM and build
+    RangedIndirection.cpp
+    CMakeLists.txt
+  BFS IR
+    bfs-ir.bc
+
+Command to generate the IR: 
+  clang -stdlib=libc++ -std=c++11 -I/usr/lib/gcc/x86_64-linux-gnu/7.1.0/include/ -I./../sniper6.1/include -Wall -emit-llvm -c -S bfs.cc -o bfs-ir.bc
+Command to run the pass: 
+  opt -load <path-to-llvm-pass>/LLVMRangedIndirection.so -RangedIndirection < <path-to-ir>/bfs-ir.bc > /dev/null
+
+Output expected:
+    Function: BUStep
+    	Matched:
+    	  %call4 = call i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood5beginEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %8)
+    		which has load:   %0 = load i32**, i32*** %g_index_, align 8
+    	with
+    	  %call5 = call i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood3endEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %9)
+    		which has load:   %11 = load i32*, i32** %__end3, align 8
+    
+    Function: TDStep
+    	Matched:
+    	  %call5 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood5beginEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %8)
+              to label %invoke.cont4 unwind label %lpad
+    		which has load:   %0 = load i32**, i32*** %g_index_, align 8
+    	with
+    	  %call7 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood3endEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %9)
+              to label %invoke.cont6 unwind label %lpad
+    		which has load:   %11 = load i32*, i32** %__end2, align 8
+    
+    Function: BFSVerifier
+    	Matched:
+    	  %call15 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood5beginEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %64)
+              to label %invoke.cont14 unwind label %lpad2
+    		which has load:   %0 = load i32**, i32*** %g_index_, align 8
+    	with
+    	  %call17 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood3endEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %65)
+              to label %invoke.cont16 unwind label %lpad2
+    		which has load:   %67 = load i32*, i32** %__end2, align 8
+    
+    Function: BFSVerifier
+    	Matched:
+    	  %call81 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood5beginEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %136)
+              to label %invoke.cont80 unwind label %lpad2
+    		which has load:   %0 = load i32**, i32*** %g_index_, align 8
+    	with
+    	  %call83 = invoke i32* @_ZN8CSRGraphIiiLb1EE12Neighborhood3endEv(%"class.CSRGraph<int, int, true>::Neighborhood"* %137)
+              to label %invoke.cont82 unwind label %lpad2
+    		which has load:   %139 = load i32*, i32** %__end3, align 8
+    
