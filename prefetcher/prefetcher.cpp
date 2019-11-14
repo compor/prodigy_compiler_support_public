@@ -58,7 +58,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
   Result.allocs.clear();
 
   identifyAlloc(F, Result.allocs);
-  identifyGEPDependence(F, DI);
+  identifyGEPDependence(F, DI); // TODO: Kuba pass in Result.allocs
 
   return false;
 }

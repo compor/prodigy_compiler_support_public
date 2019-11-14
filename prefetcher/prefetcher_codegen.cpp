@@ -122,6 +122,8 @@ public:
   }
 
   void emitRegisterNode(myAllocCallInfo &AI) {
+
+	  // TODO: add size of elems, compute number of elements.
     if (auto *func =
             Mod->getFunction(PrefetcherRuntime::RegisterNodeWithSize)) {
       llvm::SmallVector<llvm::Value *, 4> args;
@@ -147,8 +149,10 @@ public:
     Builder.CreateCall(F);
   }
 
+  // TODO: Kuba
   void emitRegisterTravEdge() {}
 
+  // TODO: Kuba
   void emitRegisterTrigEdge() {}
 
   void emitSimUserPFSetParam(llvm::Instruction &I) {
