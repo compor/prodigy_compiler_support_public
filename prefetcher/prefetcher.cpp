@@ -76,8 +76,8 @@ static RegisterPass<Prefetcher_Module> Y("prefetcher_module",
                                          false, /* Only looks at CFG */
                                          true /* Analysis Pass */);
 
-char Prefetcher::ID = 0; // Initialization value not important
+char PrefetcherPass::ID = 0; // Initialization value not important
 
-static RegisterPass<Prefetcher> X("prefetcher", "Prefetcher Pass",
+static RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
                                   false, /* Only looks at CFG */
                                   false /* Analysis Pass */);

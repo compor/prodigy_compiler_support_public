@@ -42,9 +42,9 @@ struct myAllocCallInfo {
 
 using namespace llvm;
 
-struct Prefetcher : public FunctionPass {
+struct PrefetcherPass : public FunctionPass {
   static char ID;
-  Prefetcher() : FunctionPass(ID) {}
+  PrefetcherPass() : FunctionPass(ID) {}
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
     // AU.addRequired<LoopInfoWrapperPass>();

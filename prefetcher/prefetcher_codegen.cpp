@@ -236,7 +236,7 @@ static llvm::RegisterStandardPasses
 bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   bool hasModuleChanged = true;
 
-  auto &pfa = getAnalysis<Prefetcher>();
+  auto &pfa = getAnalysis<PrefetcherPass>();
 
   PrefetcherCodegen pfcg(CurMod);
   pfcg.declareRuntime();
@@ -253,7 +253,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 }
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-  AU.addRequired<Prefetcher>();
+  AU.addRequired<PrefetcherPass>();
 
   return;
 }
