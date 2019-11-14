@@ -30,8 +30,8 @@ using namespace llvm;
 // std::vector<llvm::Value*> inputArgument;
 //};
 
-std::vector<myAllocCallInfo> identifyAlloc(Function &F) {
-  std::vector<myAllocCallInfo> alloc_info_vec;
+void identifyAlloc(Function &F,
+                   llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
   for (llvm::BasicBlock &BB : F) {
     for (llvm::Instruction &I : BB) {
       CallSite CS(&I);
@@ -48,36 +48,47 @@ std::vector<myAllocCallInfo> identifyAlloc(Function &F) {
           allocInfo.allocInst = &I;
           allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
                                           CS.args().begin(), CS.args().end());
-          alloc_info_vec.push_back(allocInfo);
+          allocInfos.push_back(allocInfo);
         }
       }
     }
   }
-  return alloc_info_vec;
+  return;
+}
+
+bool PrefetcherPass::runOnFunction(llvm::Function &F) {
+  DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
+  Result.allocs.clear();
+
+  identifyAlloc(F, Result.allocs);
+  identifyGEPDependence(F, DI);
+
+  // addOne(F);
+
+  return false;
 }
 
 /* End identify Custom malloc */
 
-namespace {
+// namespace {
 
-struct Prefetcher_Module : public ModulePass {
-  static char ID;
-  Prefetcher_Module() : ModulePass(ID) {}
+// struct Prefetcher_Module : public ModulePass {
+// static char ID;
+// Prefetcher_Module() : ModulePass(ID) {}
 
-  bool runOnModule(Module &M) override { return false; }
-};
+// bool runOnModule(Module &M) override { return false; }
+//};
 
-} // namespace
+//} // namespace
 
-char Prefetcher_Module::ID = 0; // Initialization value not important
+// char Prefetcher_Module::ID = 0; // Initialization value not important
 
-static RegisterPass<Prefetcher_Module> Y("prefetcher_module",
-                                         "Module Prefetcher Pass",
-                                         false, /* Only looks at CFG */
-                                         true /* Analysis Pass */);
+// static RegisterPass<Prefetcher_Module> Y("prefetcher_module",
+//"Module Prefetcher Pass",
+// false, [> Only looks at CFG <]
+// true [> Analysis Pass <]);
 
 char PrefetcherPass::ID = 0; // Initialization value not important
 
-static RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
-                                  false, /* Only looks at CFG */
-                                  false /* Analysis Pass */);
+static RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass", false,
+                                      false);

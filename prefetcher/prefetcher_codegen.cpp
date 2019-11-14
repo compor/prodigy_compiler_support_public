@@ -112,7 +112,7 @@ public:
           llvm::Type::getInt32Ty(Mod->getContext()), true);
 
       Mod->getOrInsertFunction(e, funcType);
-      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "adding func << " << e
+      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "adding func: " << e
                                                << " to module "
                                                << Mod->getName() << "\n");
     }
@@ -209,7 +209,7 @@ public:
 
 char PrefetcherCodegenPass::ID = 0;
 static llvm::RegisterPass<PrefetcherCodegenPass>
-    X("prefetcher-codegen", "Prefetcher Codegen Pass", false, false);
+    Y("prefetcher-codegen", "Prefetcher Codegen Pass", false, false);
 
 // plugin registration for clang
 
@@ -233,20 +233,45 @@ static llvm::RegisterStandardPasses
 
 //
 
-bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
-  bool hasModuleChanged = true;
+static bool shouldSkip(llvm::Function &CurFunc) {
+  if (CurFunc.isIntrinsic() || CurFunc.empty()) {
+    return true;
+  }
 
-  auto &pfa = getAnalysis<PrefetcherPass>();
+  auto found =
+      std::find(PrefetcherRuntime::Functions.begin(),
+                PrefetcherRuntime::Functions.end(), CurFunc.getName());
+  if (found != PrefetcherRuntime::Functions.end()) {
+    return true;
+  }
+
+  return false;
+}
+
+//
+
+bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
+  bool hasModuleChanged = false;
 
   PrefetcherCodegen pfcg(CurMod);
   pfcg.declareRuntime();
 
   for (auto &curFunc : CurMod) {
-    //auto ai = identifyAlloc(curFunc);
+    if (shouldSkip(curFunc)) {
+      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
+                                               << curFunc.getName() << '\n';);
+      continue;
+    }
 
-    //if (ai.allocInst.size()) {
-      //pfcg.emitRegisterNode(ai);
-    //}
+    DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "processing func: "
+                                             << curFunc.getName() << '\n';);
+
+    auto &pfa = this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
+    for (auto &ai : pfa.allocs) {
+      if (ai.allocInst) {
+        pfcg.emitRegisterNode(ai);
+      }
+    }
   }
 
   return hasModuleChanged;
@@ -254,6 +279,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
   AU.addRequired<PrefetcherPass>();
+  AU.setPreservesCFG();
 
   return;
 }

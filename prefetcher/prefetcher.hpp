@@ -24,9 +24,13 @@
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Type.h"
 
+#include "llvm/ADT/SmallVector.h"
+// using llvm::SmallVector
+
 #include "util.hpp"
 
 #include <vector>
+#include <string>
 
 namespace llvm {
 class Value;
@@ -35,16 +39,27 @@ class Instruction;
 
 struct myAllocCallInfo {
   llvm::Instruction *allocInst;
-  std::vector<llvm::Value *> inputArguments;
+  llvm::SmallVector<llvm::Value *, 3> inputArguments;
 };
 
-//myAllocCallInfo identifyAlloc(llvm::Function &F);
+struct PrefetcherAnalysisResult {
+  llvm::SmallVector<myAllocCallInfo, 8> allocs;
+};
 
 using namespace llvm;
 
 struct PrefetcherPass : public FunctionPass {
   static char ID;
+
+  using ResultT = PrefetcherAnalysisResult;
+
+  ResultT Result;
+
   PrefetcherPass() : FunctionPass(ID) {}
+
+  const ResultT &getPFA() const { return Result; }
+
+  ResultT &getPFA() { return Result; }
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
     // AU.addRequired<LoopInfoWrapperPass>();
@@ -54,10 +69,9 @@ struct PrefetcherPass : public FunctionPass {
 
   // ***** helper function to print vectors ****** //
   // This version of the function takes a vector of T* as input
-  template <typename T>
-  void printVector(std::string inStr, std::vector<T *> inVector) {
+  template <typename T> void printVector(std::string inStr, T begin, T end) {
     errs() << inStr << ": < ";
-    for (auto it = inVector.begin(); it != inVector.end(); ++it) {
+    for (auto it = begin; it != end; ++it) {
       errs() << **it << " ";
     }
     errs() << ">\n";
@@ -138,7 +152,7 @@ struct PrefetcherPass : public FunctionPass {
               if (usedInLoad(U)) {
                 errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
                 errs() << *I;
-                printVector("\n  is used by:\n", uses);
+                printVector("\n  is used by:\n", uses.begin(), uses.end());
                 errs() << "\n";
                 dependentGEPs.push_back(std::make_pair(I, U));
               }
@@ -156,7 +170,6 @@ struct PrefetcherPass : public FunctionPass {
   /* Identify Standard malloc */
 
   bool identifyMemoryAllocations(Function &F) {
-
     bool malloc_present = false;
 
     for (llvm::BasicBlock &BB : F) {
@@ -180,40 +193,6 @@ struct PrefetcherPass : public FunctionPass {
 
     return false;
   }
-
-  /* End Identify Standard malloc */
-
-  /* Identify Custom malloc */
-
-  // struct myAllocCallInfo {
-  // std::vector<llvm::Instruction*> allocInst;
-  // std::vector<llvm::Value*> inputArgument;
-  //};
-
-  //myAllocCallInfo identifyAlloc(Function &F) {
-    //myAllocCallInfo allocInfo;
-    //for (llvm::BasicBlock &BB : F) {
-      //for (llvm::Instruction &I : BB) {
-        //CallSite CS(&I);
-        //if (!CS.getInstruction()) {
-          //continue;
-        //}
-        //Value *called = CS.getCalledValue()->stripPointerCasts();
-
-        //if (llvm::Function *f = dyn_cast<Function>(called)) {
-          //if (f->getName().equals("myIntMallocFn32")) {
-            //// errs() << "Alloc: " << I << "\n";
-            //// errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-            //allocInfo.allocInst.push_back(&I);
-            //allocInfo.inputArgument.push_back(CS.getArgOperand(0));
-          //}
-        //}
-      //}
-    //}
-    //return allocInfo;
-  //}
-
-  /* End identify Custom malloc */
 
   /* Test */
 
@@ -245,24 +224,7 @@ struct PrefetcherPass : public FunctionPass {
     return true;
   }
 
-  bool runOnFunction(Function &F) override {
-
-    //myAllocCallInfo allocInfo;
-    DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
-
-    //allocInfo = identifyAlloc(F);
-    //if (!allocInfo.allocInst.empty()) {
-      //errs() << "\n --- \n" << F.getName() << "\n --- \n";
-      //printVector("startPointers", allocInfo.allocInst);
-      //printVector("sizeOfArray", allocInfo.inputArgument);
-      //errs() << "\n";
-    //}
-
-    identifyGEPDependence(F, DI);
-
-    //		addOne(F);
-    return false;
-  }
+  bool runOnFunction(llvm::Function &F) override;
 };
 
 #endif // PREFETCHER_HPP_
