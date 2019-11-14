@@ -1,46 +1,41 @@
-// LLVM Headers
-#include "llvm/Pass.h"
+// LLVM
 #include "llvm/IR/Function.h"
+#include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Instruction.h"
 
+#include "llvm/Analysis/DependenceAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemorySSA.h"
-#include "llvm/Analysis/DependenceAnalysis.h"
+
+#include "llvm/ADT/SmallVector.h"
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Type.h"
 
-// Project headers
-#include "util.hpp"
-#include "prefetcher.hpp"
-
-// Standard libs
+// standard
 #include <vector>
 
-using namespace llvm;
+// project
+#include "prefetcher.hpp"
+#include "util.hpp"
 
-/* Identify Custom malloc */
+namespace {
 
-// struct myAllocCallInfo {
-// std::vector<llvm::Instruction*> allocInst;
-// std::vector<llvm::Value*> inputArgument;
-//};
-
-void identifyAlloc(Function &F,
+void identifyAlloc(llvm::Function &F,
                    llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
   for (llvm::BasicBlock &BB : F) {
     for (llvm::Instruction &I : BB) {
-      CallSite CS(&I);
+      llvm::CallSite CS(&I);
       if (!CS.getInstruction()) {
         continue;
       }
-      Value *called = CS.getCalledValue()->stripPointerCasts();
+      llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
 
-      if (llvm::Function *f = dyn_cast<Function>(called)) {
+      if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
         if (f->getName().equals("myIntMallocFn32")) {
           // errs() << "Alloc: " << I << "\n";
           // errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
@@ -53,17 +48,17 @@ void identifyAlloc(Function &F,
       }
     }
   }
-  return;
 }
 
+} // namespace
+
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
-  DependenceInfo &DI = getAnalysis<DependenceAnalysisWrapperPass>().getDI();
+  llvm::DependenceInfo &DI =
+      getAnalysis<llvm::DependenceAnalysisWrapperPass>().getDI();
   Result.allocs.clear();
 
   identifyAlloc(F, Result.allocs);
   identifyGEPDependence(F, DI);
-
-  // addOne(F);
 
   return false;
 }
@@ -90,5 +85,5 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 char PrefetcherPass::ID = 0; // Initialization value not important
 
-static RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass", false,
-                                      false);
+static llvm::RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
+                                            false, false);
