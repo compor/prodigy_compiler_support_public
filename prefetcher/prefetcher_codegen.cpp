@@ -142,7 +142,7 @@ public:
                         int num_edges_pf, int num_triggers_pf) {}
 
   void emitCreateEnable(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "create_enable");
+    llvm::Function *F = getFunctionFromInst(I, PrefetcherRuntime::CreateEnable);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
@@ -152,43 +152,47 @@ public:
   void emitRegisterTrigEdge() {}
 
   void emitSimUserPFSetParam(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_user_pf_set_param");
+    llvm::Function *F =
+        getFunctionFromInst(I, PrefetcherRuntime::SimUserPfSetParam);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimUserPFSetEnable(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_user_pf_set_enable");
+    llvm::Function *F =
+        getFunctionFromInst(I, PrefetcherRuntime::SimUserPfSetEnable);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimUserPFEnable(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_user_pf_enable");
+    llvm::Function *F =
+        getFunctionFromInst(I, PrefetcherRuntime::SimUserPfEnable);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimUserWait(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_user_wait");
+    llvm::Function *F = getFunctionFromInst(I, PrefetcherRuntime::SimUserWait);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimRoiStart(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_roi_start");
+    llvm::Function *F = getFunctionFromInst(I, PrefetcherRuntime::SimRoiStart);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimRoiEnd(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_roi_end");
+    llvm::Function *F = getFunctionFromInst(I, PrefetcherRuntime::SimRoiEnd);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
 
   void emitSimUserPFDisable(llvm::Instruction &I) {
-    llvm::Function *F = getFunctionFromInst(I, "sim_user_pf_disable");
+    llvm::Function *F =
+        getFunctionFromInst(I, PrefetcherRuntime::SimUserPfDisable);
     llvm::IRBuilder<> Builder(&I);
     Builder.CreateCall(F);
   }
