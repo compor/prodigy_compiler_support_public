@@ -102,9 +102,10 @@ const std::vector<std::string> PrefetcherRuntime::Functions = {
 
 class PrefetcherCodegen {
   llvm::Module *Mod;
+  unsigned long NodeCount;
 
 public:
-  PrefetcherCodegen(llvm::Module &M) : Mod(&M){};
+  PrefetcherCodegen(llvm::Module &M) : Mod(&M), NodeCount(0){};
 
   void declareRuntime() {
     for (auto e : PrefetcherRuntime::Functions) {
@@ -112,9 +113,9 @@ public:
           llvm::Type::getInt32Ty(Mod->getContext()), true);
 
       Mod->getOrInsertFunction(e, funcType);
-      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "adding func: " << e
-                                               << " to module "
-                                               << Mod->getName() << "\n");
+      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs()
+                                      << "adding func: " << e << " to module "
+                                      << Mod->getName() << "\n");
     }
 
     return;
@@ -128,9 +129,8 @@ public:
       args.push_back(AI.allocInst);
       args.append(AI.inputArguments.begin(), AI.inputArguments.end());
 
-      // TODO change 0 to based on a node counter
       args.push_back(llvm::ConstantInt::get(
-          llvm::IntegerType::get(Mod->getContext(), 32), 0));
+          llvm::IntegerType::get(Mod->getContext(), 32), NodeCount++));
 
       auto *insertPt = AI.allocInst->getParent()->getTerminator();
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
@@ -238,9 +238,8 @@ static bool shouldSkip(llvm::Function &CurFunc) {
     return true;
   }
 
-  auto found =
-      std::find(PrefetcherRuntime::Functions.begin(),
-                PrefetcherRuntime::Functions.end(), CurFunc.getName());
+  auto found = std::find(PrefetcherRuntime::Functions.begin(),
+                         PrefetcherRuntime::Functions.end(), CurFunc.getName());
   if (found != PrefetcherRuntime::Functions.end()) {
     return true;
   }
