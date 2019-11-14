@@ -18,7 +18,7 @@ inline std::string demangle(const char* name)
 	return (status == 0) ? res.get() : std::string(name);
 }
 
-llvm::Function* getFunctionFromInst(llvm::Instruction &I, std::string s)
+static llvm::Function* getFunctionFromInst(llvm::Instruction &I, std::string s)
 {
 	llvm::BasicBlock * B = I.getParent();
 	llvm::Function * F = B->getParent();

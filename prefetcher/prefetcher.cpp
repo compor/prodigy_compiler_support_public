@@ -165,7 +165,7 @@ struct Prefetcher : public FunctionPass {
 					std::vector<llvm::Instruction*> uses;
 
 					if(usedInLoad(I)
-					        && recurseUsesSilent(*I,uses)) 
+					        && recurseUsesSilent(*I,uses))
                     {
                         for(auto U : uses) {
                             if(usedInLoad(U)) {
@@ -276,86 +276,6 @@ struct Prefetcher : public FunctionPass {
 		}
 
 		return true;
-	}
-
-	void emitCreateParams(llvm::Instruction &I, int num_nodes_pf, int num_edges_pf, int num_triggers_pf)
-	{
-
-	}
-
-	void emitCreateEnable(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "create_enable");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	// The arguments here should be pointers to the relevant elements rather
-	void emitRegisterNode(llvm::Instruction &I, uint64_t base, int64_t size, int64_t elem_size, int64_t node_id)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "register_node");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-		// TODO Arguments
-	}
-
-	void emitRegisterTravEdge()
-	{
-
-	}
-
-	void emitRegisterTrigEdge()
-	{
-
-	}
-
-	void emitSimUserPFSetParam(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_user_pf_set_param");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimUserPFSetEnable(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_user_pf_set_enable");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimUserPFEnable(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_user_pf_enable");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimUserWait(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_user_wait");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimRoiStart(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_roi_start");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimRoiEnd(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_roi_end");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
-	}
-
-	void emitSimUserPFDisable(llvm::Instruction &I)
-	{
-		llvm::Function * F = getFunctionFromInst(I, "sim_user_pf_disable");
-		llvm::IRBuilder<> Builder(&I);
-		Builder.CreateCall(F);
 	}
 
 	bool runOnFunction(Function &F) override {
