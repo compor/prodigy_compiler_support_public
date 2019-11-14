@@ -20,10 +20,6 @@
 #include "llvm/IR/Module.h"
 // using llvm::Module
 
-#include "llvm/Analysis/LoopInfo.h"
-// using llvm::LoopInfoWrapperPass
-// using llvm::LoopInfo
-
 #include "llvm/IR/LegacyPassManager.h"
 // using llvm::PassManagerBase
 
@@ -129,14 +125,14 @@ public:
             Mod->getFunction(PrefetcherRuntime::RegisterNodeWithSize)) {
       llvm::SmallVector<llvm::Value *, 4> args;
 
-      args.push_back(AI.allocInst.back());
-      args.append(AI.inputArgument.begin(), AI.inputArgument.end());
+      args.push_back(AI.allocInst);
+      args.append(AI.inputArguments.begin(), AI.inputArguments.end());
 
       // TODO change 0 to based on a node counter
       args.push_back(llvm::ConstantInt::get(
           llvm::IntegerType::get(Mod->getContext(), 32), 0));
 
-      auto *insertPt = AI.allocInst.back()->getParent()->getTerminator();
+      auto *insertPt = AI.allocInst->getParent()->getTerminator();
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
                                           args, "", insertPt);
     }
@@ -240,23 +236,24 @@ static llvm::RegisterStandardPasses
 bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   bool hasModuleChanged = true;
 
+  auto &pfa = getAnalysis<Prefetcher>();
+
   PrefetcherCodegen pfcg(CurMod);
   pfcg.declareRuntime();
 
   for (auto &curFunc : CurMod) {
-    auto ai = identifyAlloc(curFunc);
+    //auto ai = identifyAlloc(curFunc);
 
-    if (ai.allocInst.size()) {
-      pfcg.emitRegisterNode(ai);
-    }
+    //if (ai.allocInst.size()) {
+      //pfcg.emitRegisterNode(ai);
+    //}
   }
 
   return hasModuleChanged;
 }
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-  AU.addRequiredTransitive<llvm::LoopInfoWrapperPass>();
-  AU.addPreserved<llvm::LoopInfoWrapperPass>();
+  AU.addRequired<Prefetcher>();
 
   return;
 }
