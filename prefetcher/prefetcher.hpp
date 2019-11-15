@@ -42,12 +42,28 @@ struct myAllocCallInfo {
   llvm::SmallVector<llvm::Value *, 3> inputArguments;
 };
 
+struct GEPDepInfo {
+	llvm::Instruction * source;
+	llvm::Instruction * target;
+};
+
 struct PrefetcherAnalysisResult {
   llvm::SmallVector<myAllocCallInfo, 8> allocs;
+  llvm::SmallVector<GEPDepInfo, 8> geps;
   // TODO: Kuba add results from edge analysis
 };
 
 using namespace llvm;
+
+// ***** helper function to print vectors ****** //
+// This version of the function takes a vector of T* as input
+template <typename T> void printVector(std::string inStr, T begin, T end) {
+  errs() << inStr << ": < ";
+  for (auto it = begin; it != end; ++it) {
+    errs() << **it << " ";
+  }
+  errs() << ">\n";
+}
 
 struct PrefetcherPass : public FunctionPass {
   static char ID;
@@ -67,106 +83,6 @@ struct PrefetcherPass : public FunctionPass {
     AU.addRequired<MemorySSAWrapperPass>();
     AU.addRequired<DependenceAnalysisWrapperPass>();
   }
-
-  // ***** helper function to print vectors ****** //
-  // This version of the function takes a vector of T* as input
-  template <typename T> void printVector(std::string inStr, T begin, T end) {
-    errs() << inStr << ": < ";
-    for (auto it = begin; it != end; ++it) {
-      errs() << **it << " ";
-    }
-    errs() << ">\n";
-  }
-
-  /* GEP DEPENDENCE */
-
-  bool usedInLoad(llvm::Instruction *I) {
-    for (auto &u : I->uses()) {
-      auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
-
-      if (user->getOpcode() == Instruction::Load) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  bool recurseUsesSilent(llvm::Instruction &I,
-                         std::vector<llvm::Instruction *> &uses) {
-    bool ret = false;
-
-    for (auto &u : I.uses()) {
-      auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
-
-      if (user->getOpcode() == Instruction::GetElementPtr) {
-        ret = true;
-        uses.push_back(user);
-      }
-
-      ret |= recurseUsesSilent(*user, uses);
-    }
-
-    return ret;
-  }
-
-  std::vector<std::pair<llvm::Instruction *, llvm::Instruction *>>
-  identifyGEPDependence(Function &F, DependenceInfo &DI) {
-
-    std::vector<llvm::Instruction *> insns;
-    std::vector<llvm::Instruction *> loads;
-
-    for (llvm::BasicBlock &BB : F) {
-      for (llvm::Instruction &I : BB) {
-        // errs() << "I  :" << I << "\n";
-        if (I.getOpcode() == Instruction::GetElementPtr) {
-          insns.push_back(&I);
-          // errs() << "ins:" << I << "\n";
-        }
-
-        if (I.getOpcode() == Instruction::Load) {
-          loads.push_back(&I);
-        }
-
-        if (I.getOpcode() == Instruction::Load) {
-          loads.push_back(&I);
-        }
-      }
-    }
-
-    std::vector<std::pair<llvm::Instruction *, llvm::Instruction *>>
-        dependentGEPs;
-
-    if (insns.size() > 0) {
-      for (auto I : insns) {
-        if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
-          // usedInLoad()        finds if a GEP instruction is used in load
-          // recurseUsesSilent() finds if the GEP instruction is
-          //                     *eventually* used in another GEP instruction
-          // can detect loads of type A[B[i]]
-          // and does not detect stores of type A[B[i]]
-
-          std::vector<llvm::Instruction *> uses;
-
-          if (usedInLoad(I) && recurseUsesSilent(*I, uses)) {
-            for (auto U : uses) {
-              if (usedInLoad(U)) {
-                errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-                errs() << *I;
-                printVector("\n  is used by:\n", uses.begin(), uses.end());
-                errs() << "\n";
-                dependentGEPs.push_back(std::make_pair(I, U));
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return dependentGEPs;
-  }
-
-  /* End GEP Dependence */
 
   /* Identify Standard malloc */
 
