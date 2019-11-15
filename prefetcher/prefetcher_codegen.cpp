@@ -192,7 +192,39 @@ public:
 	}
 
 	// TODO: Kuba
-	void emitRegisterTrigEdge() {}
+	// If a node is a source but not a target, then it is a trigger node.
+	void emitRegisterTrigEdge(llvm::SmallVector<GEPDepInfo,8> &geps)
+	{
+		GEPDepInfo * current_trigger;
+
+		for (auto &gdi : geps) {
+			bool trigger_node = true;
+			for (auto &gdi2 : geps) {
+				if (gdi.source == gdi2.target) {
+					trigger_node = false;
+				}
+			}
+
+			if (trigger_node) {
+				if (auto *func =
+						Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
+					llvm::SmallVector<llvm::Value *, 4> args;
+					args.push_back(gdi.source);
+					args.push_back(gdi.source);
+
+					args.push_back(llvm::ConstantInt::get(
+							llvm::IntegerType::get(Mod->getContext(), 32),UpToOffset));
+
+					args.push_back(llvm::ConstantInt::get(
+							llvm::IntegerType::get(Mod->getContext(), 32),NeverSquash));
+
+					auto *insertPt = gdi.source->getParent()->getFirstNonPHIOrDbg();
+					auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+							args, "", insertPt);
+				}
+			}
+		}
+	}
 
 	void emitSimUserPFSetParam(llvm::Instruction &I) {
 		llvm::Function *F =
