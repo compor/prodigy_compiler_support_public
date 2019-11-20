@@ -357,17 +357,29 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 	PrefetcherCodegen pfcg(CurMod);
 	pfcg.declareRuntime();
 
-	for (auto &curFunc : CurMod) {
+	for (llvm::Function &curFunc : CurMod) {
+
 		if (shouldSkip(curFunc)) {
 			DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
 					<< curFunc.getName() << '\n';);
 			continue;
 		}
 
+
 		DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "processing func: "
 				<< curFunc.getName() << '\n';);
 
 		PrefetcherAnalysisResult &pfa = this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
+
+		if (curFunc.getName() == "main") {
+			llvm::BasicBlock &bb = curFunc.getEntryBlock();
+			llvm::Instruction * I = bb.getFirstNonPHIOrDbg();
+
+//			TODO: One more pass for this to get the number of trigger edges?
+			pfcg.emitCreateParams(*I, (int)(pfa.allocs.size()), (int)(pfa.geps.size()), 4); // the 4 here is random.
+			pfcg.emitCreateEnable(*I);
+		}
+
 		for (auto &ai : pfa.allocs) {
 			if (ai.allocInst) {
 				pfcg.emitRegisterNode(ai);
