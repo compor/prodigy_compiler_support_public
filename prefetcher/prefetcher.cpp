@@ -128,6 +128,9 @@ void identifyGEPDependence(Function &F, llvm::SmallVectorImpl<GEPDepInfo> &gepIn
                 GEPDepInfo g;
                 g.source = I;
                 g.target = U;
+
+                errs() << "source: " << *(g.source) << "\n";
+                errs() << "target: " << *(g.target) << "\n";
                 gepInfos.push_back(g);
               }
             }
