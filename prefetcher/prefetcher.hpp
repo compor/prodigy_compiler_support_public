@@ -5,21 +5,23 @@
 #ifndef PREFETCHER_HPP_
 #define PREFETCHER_HPP_
 
+// LLVM
 #include "llvm/IR/Function.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Value.h"
 
-#include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/Pass.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
+#include "llvm/IR/Instruction.h"
 
+#include "llvm/Analysis/DependenceAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemorySSA.h"
-#include "llvm/Analysis/DependenceAnalysis.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Type.h"
@@ -27,10 +29,21 @@
 #include "llvm/ADT/SmallVector.h"
 // using llvm::SmallVector
 
+#include "llvm/Support/Debug.h"
+// using DEBUG macro
+// using llvm::dbgs
+
+// standard
+#include <vector>
+// using std::vector
+
+#include <string>
+// using std::string
+
+// project
 #include "util.hpp"
 
-#include <vector>
-#include <string>
+#define DEBUG_TYPE "prefetcher-analysis"
 
 namespace llvm {
 class Value;
@@ -43,8 +56,8 @@ struct myAllocCallInfo {
 };
 
 struct GEPDepInfo {
-	llvm::Instruction * source;
-	llvm::Instruction * target;
+  llvm::Instruction *source;
+  llvm::Instruction *target;
 };
 
 struct PrefetcherAnalysisResult {
@@ -80,35 +93,9 @@ struct PrefetcherPass : public FunctionPass {
 
   virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
     // AU.addRequired<LoopInfoWrapperPass>();
+    AU.addRequired<TargetLibraryInfoWrapperPass>();
     AU.addRequired<MemorySSAWrapperPass>();
     AU.addRequired<DependenceAnalysisWrapperPass>();
-  }
-
-  /* Identify Standard malloc */
-
-  bool identifyMemoryAllocations(Function &F) {
-    bool malloc_present = false;
-
-    for (llvm::BasicBlock &BB : F) {
-      for (llvm::Instruction &I : BB) {
-        CallSite CS(&I);
-        if (!CS.getInstruction()) {
-          continue;
-        }
-        Value *called = CS.getCalledValue()->stripPointerCasts();
-
-        if (llvm::Function *f = dyn_cast<Function>(called)) {
-          if (f->getName().equals("calloc")) {
-            malloc_present = true;
-          } else if (f->getName().equals("malloc")) {
-            malloc_present = true;
-          }
-        }
-        // Check for other allocation functions - C++ new, etc.
-      }
-    }
-
-    return false;
   }
 
   bool runOnFunction(llvm::Function &F) override;
