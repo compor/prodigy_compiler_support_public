@@ -126,9 +126,11 @@ enum FuncId {
 class PrefetcherCodegen {
   llvm::Module *Mod;
   unsigned long NodeCount;
+  unsigned long TriggerEdgeCount;
 
 public:
-  PrefetcherCodegen(llvm::Module &M) : Mod(&M), NodeCount(0){};
+  PrefetcherCodegen(llvm::Module &M)
+      : Mod(&M), NodeCount(0), TriggerEdgeCount(0){};
 
   void declareRuntime() {
     for (auto e : PrefetcherRuntime::Functions) {
@@ -164,7 +166,7 @@ public:
   }
 
   void emitCreateParams(llvm::Instruction &I, int num_nodes_pf,
-                        int num_edges_pf, int num_triggers_pf) {
+                        int num_edges_pf) {
     llvm::Function *func =
         getFunctionFromInst(I, PrefetcherRuntime::CreateParams);
     llvm::SmallVector<llvm::Value *, 4> args;
@@ -176,7 +178,7 @@ public:
         llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf));
 
     args.push_back(llvm::ConstantInt::get(
-        llvm::IntegerType::get(Mod->getContext(), 32), num_triggers_pf));
+        llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount));
 
     auto *insertPt = &I;
 
@@ -243,6 +245,8 @@ public:
           auto *call =
               llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
                                      insertPt->getNextNode());
+
+          TriggerEdgeCount++;
         }
       }
     }
@@ -360,8 +364,10 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
   PrefetcherCodegen pfcg(CurMod);
   pfcg.declareRuntime();
 
-  for (llvm::Function &curFunc : CurMod) {
+  unsigned totalNodesNum = 0;
+  unsigned totalEdgesNum = 0;
 
+  for (llvm::Function &curFunc : CurMod) {
     if (shouldSkip(curFunc)) {
       DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
                                                << curFunc.getName() << '\n';);
@@ -374,28 +380,27 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
     PrefetcherAnalysisResult &pfa =
         this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
 
-    if (curFunc.getName() == "main") {
-      llvm::BasicBlock &bb = curFunc.getEntryBlock();
-      llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
-
-      //			TODO: One more pass for this to get the number
-      // of trigger edges?
-      pfcg.emitCreateParams(*I, (int)(pfa.allocs.size()),
-                            (int)(pfa.geps.size()), 4); // the 4 here is random.
-      pfcg.emitCreateEnable(*I);
-    }
-
     for (auto &ai : pfa.allocs) {
       if (ai.allocInst) {
         pfcg.emitRegisterNode(ai);
       }
+      totalNodesNum++;
     }
 
     for (GEPDepInfo &gdi : pfa.geps) {
       pfcg.emitRegisterTravEdge(gdi);
+      totalEdgesNum++;
     }
 
     pfcg.emitRegisterTrigEdge(pfa.geps);
+  }
+
+  if (auto *mainFn = CurMod.getFunction("main")) {
+    llvm::BasicBlock &bb = mainFn->getEntryBlock();
+    llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
+
+    pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
+    pfcg.emitCreateEnable(*I);
   }
 
   return hasModuleChanged;
