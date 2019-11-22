@@ -153,7 +153,9 @@ bool identifyAlloc(llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos,
       }
 
       llvm::Type *allocType = nullptr;
-      if (isCustomAllocLikeFn(CS.getInstruction())) {
+      bool isCustomAlloc = isCustomAllocLikeFn(CS.getInstruction());
+
+      if (isCustomAlloc) {
         allocType = getCustomMallocAllocatedType(
             llvm::dyn_cast<llvm::CallInst>(CS.getInstruction()));
       } else if (TLI && llvm::isAllocLikeFn(CS.getInstruction(), TLI)) {
@@ -166,36 +168,43 @@ bool identifyAlloc(llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos,
       auto elemSize = DL.getTypeAllocSize(allocType);
 
       auto *arg = llvm::dyn_cast<llvm::ConstantInt>(CS.getArgument(0));
-      if (!arg) {
-        DEBUG_WITH_TYPE(
-            DEBUG_TYPE,
-            llvm::dbgs() << "allocation size is not a compile-time constant!");
-        continue;
-      }
+      // if (!arg && !isCustomAlloc) {
+      // DEBUG_WITH_TYPE(
+      // DEBUG_TYPE,
+      // llvm::dbgs() << "allocation size is not a compile-time constant!");
+      // continue;
+      //}
 
       found = true;
-      auto allocSize = arg->getValue().getSExtValue();
       auto numElements = 1;
 
-      if (llvm::Function *func = CS.getCalledFunction()) {
-        if (func->getName().equals("myIntMallocFn32") ||
-            func->getName().equals("myIntMallocFn64")) {
-          numElements = allocSize;
+      if (arg) {
+        auto allocSize = arg->getValue().getSExtValue();
+
+        if (llvm::Function *func = CS.getCalledFunction()) {
+          if (func->getName().equals("myIntMallocFn32") ||
+              func->getName().equals("myIntMallocFn64")) {
+            numElements = allocSize;
+          }
+        } else {
+          numElements = allocSize / elemSize;
         }
-      } else {
-        numElements = allocSize / elemSize;
       }
 
-      DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs()
-                                      << "alloc elements: " << numElements
-                                      << "\nalloc element size: " << elemSize
-                                      << '\n');
+      // DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs()
+      //<< "alloc elements: " << numElements
+      //<< "\nalloc element size: " << elemSize
+      //<< '\n');
 
       myAllocCallInfo allocInfo;
       allocInfo.allocInst = &I;
       auto *intType = llvm::IntegerType::get(F.getParent()->getContext(), 64);
-      allocInfo.inputArguments.push_back(
-          llvm::ConstantInt::get(intType, numElements));
+      if (arg) {
+        allocInfo.inputArguments.push_back(
+            llvm::ConstantInt::get(intType, numElements));
+      } else {
+        allocInfo.inputArguments.push_back(CS.getArgument(0));
+      }
       allocInfo.inputArguments.push_back(
           llvm::ConstantInt::get(intType, elemSize));
 
