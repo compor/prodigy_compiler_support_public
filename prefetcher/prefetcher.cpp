@@ -40,12 +40,16 @@ void identifyNew(llvm::Function &F,
       if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
         if (f->getName().equals("_Znam")) {
           //					errs() << "Alloc: " << I <<
-          //"\n"; 					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-          //					myAllocCallInfo allocInfo;
-          //					allocInfo.allocInst = &I;
-          //					allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
+          //"\n"; 					errs() << "Argument0:"
+          //<<
+          //*(CS.getArgOperand(0)) << "\n";
+          // myAllocCallInfo
+          // allocInfo; 					allocInfo.allocInst
+          // = &I;
+          // allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
           //							CS.args().begin(),
-          //CS.args().end()); 					allocInfos.push_back(allocInfo);
+          // CS.args().end());
+          // allocInfos.push_back(allocInfo);
         }
       }
     }
@@ -105,6 +109,17 @@ llvm::PointerType *getCustomMallocType(const llvm::CallInst *CI) {
 }
 
 llvm::Type *getCustomMallocAllocatedType(const llvm::CallInst *CI) {
+  const llvm::Value *called = CI->getCalledValue()->stripPointerCasts();
+
+  if (const llvm::Function *func =
+          llvm::dyn_cast<const llvm::Function>(called)) {
+    if (func->getName().equals("myIntMallocFn32")) {
+      return llvm::IntegerType::get(func->getParent()->getContext(), 32);
+    } else if (func->getName().equals("myIntMallocFn64")) {
+      return llvm::IntegerType::get(func->getParent()->getContext(), 64);
+    }
+  }
+
   llvm::PointerType *PT = getCustomMallocType(CI);
   return PT ? PT->getElementType() : nullptr;
 }
@@ -114,7 +129,8 @@ bool isCustomAllocLikeFn(llvm::Instruction *I) {
     llvm::Value *called = CI->getCalledValue()->stripPointerCasts();
 
     if (llvm::Function *func = llvm::dyn_cast<llvm::Function>(called)) {
-      if (func->getName().equals("myIntMallocFn32")) {
+      if (func->getName().equals("myIntMallocFn32") ||
+          func->getName().equals("myIntMallocFn64")) {
         return true;
       }
     }
@@ -160,7 +176,17 @@ bool identifyAlloc(llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos,
 
       found = true;
       auto allocSize = arg->getValue().getSExtValue();
-      auto numElements = allocSize / elemSize;
+      auto numElements = 1;
+
+      if (llvm::Function *func = CS.getCalledFunction()) {
+        if (func->getName().equals("myIntMallocFn32") ||
+            func->getName().equals("myIntMallocFn64")) {
+          numElements = allocSize;
+        }
+      } else {
+        numElements = allocSize / elemSize;
+      }
+
       DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs()
                                       << "alloc elements: " << numElements
                                       << "\nalloc element size: " << elemSize
