@@ -285,7 +285,6 @@ void identifyGEPDependence(Function &F,
 } // namespace
 
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
-<<<<<<< HEAD
 
 	Result.allocs.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
