@@ -26,54 +26,55 @@
 
 namespace {
 
-
 // TODO: Extract information from new
-void identifyNew(llvm::Function &F, llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
-	for (llvm::BasicBlock &BB : F) {
-		for (llvm::Instruction &I : BB) {
-			llvm::CallSite CS(&I);
-			if (!CS.getInstruction()) {
-				continue;
-			}
-			llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
+void identifyNew(llvm::Function &F,
+                 llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
+  for (llvm::BasicBlock &BB : F) {
+    for (llvm::Instruction &I : BB) {
+      llvm::CallSite CS(&I);
+      if (!CS.getInstruction()) {
+        continue;
+      }
+      llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
 
-			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
-				if (f->getName().equals("_Znam")) {
-//					errs() << "Alloc: " << I << "\n";
-//					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-//					myAllocCallInfo allocInfo;
-//					allocInfo.allocInst = &I;
-//					allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
-//							CS.args().begin(), CS.args().end());
-//					allocInfos.push_back(allocInfo);
-				}
-			}
-		}
-	}
+      if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
+        if (f->getName().equals("_Znam")) {
+          //					errs() << "Alloc: " << I <<
+          //"\n"; 					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+          //					myAllocCallInfo allocInfo;
+          //					allocInfo.allocInst = &I;
+          //					allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
+          //							CS.args().begin(),
+          //CS.args().end()); 					allocInfos.push_back(allocInfo);
+        }
+      }
+    }
+  }
 }
 
-void identifyMalloc(llvm::Function &F, llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
-	for (llvm::BasicBlock &BB : F) {
-		for (llvm::Instruction &I : BB) {
-			llvm::CallSite CS(&I);
-			if (!CS.getInstruction()) {
-				continue;
-			}
-			llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
+void identifyMalloc(llvm::Function &F,
+                    llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
+  for (llvm::BasicBlock &BB : F) {
+    for (llvm::Instruction &I : BB) {
+      llvm::CallSite CS(&I);
+      if (!CS.getInstruction()) {
+        continue;
+      }
+      llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
 
-			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
-				if (f->getName().equals("malloc")) {
-					errs() << "Alloc: " << I << "\n";
-					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
-					myAllocCallInfo allocInfo;
-					allocInfo.allocInst = &I;
-					allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
-							CS.args().begin(), CS.args().end());
-					allocInfos.push_back(allocInfo);
-				}
-			}
-		}
-	}
+      if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
+        if (f->getName().equals("malloc")) {
+          errs() << "Alloc: " << I << "\n";
+          errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+          myAllocCallInfo allocInfo;
+          allocInfo.allocInst = &I;
+          allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
+                                          CS.args().begin(), CS.args().end());
+          allocInfos.push_back(allocInfo);
+        }
+      }
+    }
+  }
 }
 
 llvm::PointerType *getCustomMallocType(const llvm::CallInst *CI) {
@@ -181,45 +182,43 @@ bool identifyAlloc(llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos,
 }
 
 bool usedInLoad(llvm::Instruction *I) {
-	for (auto &u : I->uses()) {
-		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+  for (auto &u : I->uses()) {
+    auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
-		if (user->getOpcode() == Instruction::Load) {
-			return true;
-		}
-	}
+    if (user->getOpcode() == Instruction::Load) {
+      return true;
+    }
+  }
 
-	return false;
+  return false;
 }
 
-bool inArray(Instruction * I, std::vector<Instruction*> vec)
-{
-	for (auto *v : vec)
-	{
-		if (I == v) {
-			return true;
-		}
-	}
+bool inArray(Instruction *I, std::vector<Instruction *> vec) {
+  for (auto *v : vec) {
+    if (I == v) {
+      return true;
+    }
+  }
 
-	return false;
+  return false;
 }
 
 bool recurseUsesSilent(llvm::Instruction &I,
-		std::vector<llvm::Instruction *> &uses) {
-	bool ret = false;
+                       std::vector<llvm::Instruction *> &uses) {
+  bool ret = false;
 
-	for (auto &u : I.uses()) {
-		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+  for (auto &u : I.uses()) {
+    auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
-		if (user->getOpcode() == Instruction::GetElementPtr) {
-			ret = true;
-			uses.push_back(user);
-		}
+    if (user->getOpcode() == Instruction::GetElementPtr) {
+      ret = true;
+      uses.push_back(user);
+    }
 
-		ret |= recurseUsesSilent(*user, uses);
-	}
+    ret |= recurseUsesSilent(*user, uses);
+  }
 
-	return ret;
+  return ret;
 }
 
 void identifyGEPDependence(Function &F,
@@ -286,15 +285,15 @@ void identifyGEPDependence(Function &F,
 
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
-	Result.allocs.clear();
-	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
+  Result.allocs.clear();
+  auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
 
-  	identifyAlloc(Result.allocs, F, &TLI);
-	identifyMalloc(F, Result.allocs);
-	identifyNew(F, Result.allocs);
-	identifyGEPDependence(F, Result.geps);
+  identifyAlloc(Result.allocs, F, &TLI);
+  //	identifyMalloc(F, Result.allocs);
+  //	identifyNew(F, Result.allocs);
+  identifyGEPDependence(F, Result.geps);
 
-	return false;
+  return false;
 }
 
 /* End identify Custom malloc */
@@ -320,4 +319,4 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 char PrefetcherPass::ID = 0; // Initialization value not important
 
 static llvm::RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
-		false, false);
+                                            false, false);
