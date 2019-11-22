@@ -30,21 +30,20 @@ int main(/*int argc, char * argv[]*/)
 {
     int size0 = 5, size1 = 5;
     int size2 = size0 + size1;
-	//int * a = (int*)calloc(10, sizeof(int));
-	//int * b = (int*)malloc(10 * sizeof(int));
-	uint32_t * a = myIntMallocFn32(size2);
-	uint32_t * b = myIntMallocFn32(10);
-    uint64_t * c = (uint64_t*)myIntMallocFn64(10);
-    int * d = (int*)malloc(10 * sizeof(int));
+    uint32_t * a = myIntMallocFn32(size2);
+    uint32_t * b = myIntMallocFn32(10);
+    uint32_t * c = myIntMallocFn32(10);
+    uint64_t * d = (uint64_t*)myIntMallocFn64(10);
+    int * e = (int*)malloc(10 * sizeof(int));
 
     // initialize data structures
-	initialize(a,10);
-	initialize(b,10);
+    initialize(a,10);
+    initialize(b,10);
+    initialize(c,10);
 
     // indirection of the type A[B[i]]
-	//int c = b[a[0]];
     for(int i = 0; i < 10; ++i) {
-        *(c+i) = (uint64_t)b[a[i]];
+        *(d+i) = (uint64_t)c[b[a[i]]];
     }
 
     return 0;
