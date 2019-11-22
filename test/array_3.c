@@ -43,6 +43,9 @@ int main(/*int argc, char * argv[]*/)
 	initialize(b,10);
 	initialize(c,10);
 
+
+	sim_roi_start();
+
 	// indirection of the type A[B[i]]
 	for(int i = 0; i < 10; ++i) {
 		*(f+i) = (uint64_t)b[a[i]];
@@ -51,6 +54,8 @@ int main(/*int argc, char * argv[]*/)
 	for(int i = 0; i < 10; ++i) {
 		*(g+i) = (uint64_t)d[c[i]];
 	}
+
+	sim_roi_end();
 
 	return 0;
 }

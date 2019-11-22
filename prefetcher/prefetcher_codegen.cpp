@@ -162,6 +162,8 @@ public:
       auto *insertPt = AI.allocInst->getParent()->getTerminator();
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
                                           args, "", insertPt);
+
+      emitSimUserPFSetEnable(*(call->getNextNode()));
     }
   }
 
@@ -213,6 +215,9 @@ public:
 
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
                                           args, "", insertPt->getNextNode());
+
+//      emitSimUserPFSetParam(*(call->getNextNode()));
+//      emitSimUserPFSetEnable(*(call->getNextNode()));
     }
   }
 
@@ -247,6 +252,8 @@ public:
                                      insertPt->getNextNode());
 
           TriggerEdgeCount++;
+//          emitSimUserPFSetParam(*(call->getNextNode()));
+//          emitSimUserPFSetEnable(*(call->getNextNode()));
         }
       }
     }
