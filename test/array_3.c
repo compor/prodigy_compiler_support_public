@@ -42,7 +42,7 @@ int main(/*int argc, char * argv[]*/)
 	initialize(a,10);
 	initialize(b,10);
 	initialize(c,10);
-
+	initialize(d,10);
 
 	sim_roi_start();
 
