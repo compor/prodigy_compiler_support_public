@@ -344,6 +344,10 @@ static bool shouldSkip(llvm::Function &CurFunc) {
   if (found != PrefetcherRuntime::Functions.end()) {
     return true;
   }
+  if (CurFunc.getName().equals("myIntMallocFn32") ||
+      CurFunc.getName().equals("myIntMallocFn64")) {
+    return true;
+  }
 
   return false;
 }
@@ -375,7 +379,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
       llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
 
       //			TODO: One more pass for this to get the number
-      //of trigger edges?
+      // of trigger edges?
       pfcg.emitCreateParams(*I, (int)(pfa.allocs.size()),
                             (int)(pfa.geps.size()), 4); // the 4 here is random.
       pfcg.emitCreateEnable(*I);
