@@ -44,8 +44,7 @@ void identifyNew(llvm::Function &F,
           //<<
           //*(CS.getArgOperand(0)) << "\n";
           // myAllocCallInfo
-          // allocInfo; 					allocInfo.allocInst
-          // = &I;
+          // allocInfo; allocInfo.allocInst = &I;
           // allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
           //							CS.args().begin(),
           // CS.args().end());
