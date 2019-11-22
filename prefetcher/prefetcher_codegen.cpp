@@ -344,6 +344,10 @@ static bool shouldSkip(llvm::Function &CurFunc) {
   if (found != PrefetcherRuntime::Functions.end()) {
     return true;
   }
+  if (CurFunc.getName().equals("myIntMallocFn32") ||
+      CurFunc.getName().equals("myIntMallocFn64")) {
+    return true;
+  }
 
   return false;
 }
