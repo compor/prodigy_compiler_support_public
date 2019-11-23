@@ -147,8 +147,6 @@ public:
   }
 
   void emitRegisterNode(myAllocCallInfo &AI) {
-
-    // TODO: add size of elems, compute number of elements.
     if (auto *func =
             Mod->getFunction(PrefetcherRuntime::RegisterNodeWithSize)) {
       llvm::SmallVector<llvm::Value *, 4> args;
@@ -159,7 +157,7 @@ public:
       args.push_back(llvm::ConstantInt::get(
           llvm::IntegerType::get(Mod->getContext(), 32), NodeCount++));
 
-      auto *insertPt = AI.allocInst->getParent()->getTerminator();
+      auto *insertPt = AI.allocInst->getNextNode();
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
                                           args, "", insertPt);
 
