@@ -23,6 +23,10 @@
 #include "llvm/IR/LegacyPassManager.h"
 // using llvm::PassManagerBase
 
+#include "llvm/Analysis/LoopInfo.h"
+// using llvm::LoopInfoWrapperPass
+// using llvm::LoopInfo
+
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 // using llvm::PassManagerBuilder
 // using llvm::RegisterStandardPasses
@@ -412,6 +416,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 }
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfoWrapperPass>();
   AU.addRequired<PrefetcherPass>();
   AU.setPreservesCFG();
 

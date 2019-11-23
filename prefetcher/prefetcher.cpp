@@ -8,7 +8,6 @@
 #include "llvm/IR/Instruction.h"
 
 #include "llvm/Analysis/DependenceAnalysis.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemorySSA.h"
 
@@ -318,7 +317,6 @@ void identifyGEPDependence(Function &F,
 } // namespace
 
 void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<LoopInfoWrapperPass>();
   AU.addRequired<TargetLibraryInfoWrapperPass>();
   AU.addRequired<MemorySSAWrapperPass>();
   AU.addRequired<DependenceAnalysisWrapperPass>();
