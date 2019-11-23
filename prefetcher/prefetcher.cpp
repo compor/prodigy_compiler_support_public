@@ -317,6 +317,13 @@ void identifyGEPDependence(Function &F,
 
 } // namespace
 
+void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
+  AU.addRequired<LoopInfoWrapperPass>();
+  AU.addRequired<TargetLibraryInfoWrapperPass>();
+  AU.addRequired<MemorySSAWrapperPass>();
+  AU.addRequired<DependenceAnalysisWrapperPass>();
+}
+
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
   Result.allocs.clear();

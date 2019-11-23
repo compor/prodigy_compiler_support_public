@@ -91,12 +91,7 @@ struct PrefetcherPass : public FunctionPass {
 
   ResultT &getPFA() { return Result; }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const override {
-    // AU.addRequired<LoopInfoWrapperPass>();
-    AU.addRequired<TargetLibraryInfoWrapperPass>();
-    AU.addRequired<MemorySSAWrapperPass>();
-    AU.addRequired<DependenceAnalysisWrapperPass>();
-  }
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const override;
 
   bool runOnFunction(llvm::Function &F) override;
 };
