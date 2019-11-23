@@ -26,6 +26,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 // using llvm::LoopInfoWrapperPass
 // using llvm::LoopInfo
+// using llvm::Loop
 
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 // using llvm::PassManagerBuilder
@@ -62,6 +63,16 @@
 // plugin registration for opt
 
 namespace {
+
+llvm::Loop *getTopLevelLoop(llvm::Loop *CurLoop) {
+  auto *loop = CurLoop;
+
+  while (loop && loop->getParentLoop()) {
+    loop = loop->getParentLoop();
+  }
+
+  return loop;
+}
 
 struct PrefetcherRuntime {
   static constexpr char *CreateParams = "create_params";
@@ -129,12 +140,25 @@ enum FuncId {
 
 class PrefetcherCodegen {
   llvm::Module *Mod;
+  llvm::LoopInfo *LI;
   unsigned long NodeCount;
   unsigned long TriggerEdgeCount;
 
+  llvm::Instruction *findInsertionPointBeforeLoopNest(llvm::Instruction &I) {
+    llvm::Loop *loop = nullptr;
+    if (LI && (loop = getTopLevelLoop(LI->getLoopFor(I.getParent())))) {
+      auto *ph = loop->getLoopPreheader();
+      return ph ? loop->getLoopPreheader()->getTerminator() : nullptr;
+    }
+
+    return nullptr;
+  }
+
 public:
   PrefetcherCodegen(llvm::Module &M)
-      : Mod(&M), NodeCount(0), TriggerEdgeCount(0){};
+      : Mod(&M), LI(nullptr), NodeCount(0), TriggerEdgeCount(0){};
+
+  void setLoopInfo(llvm::LoopInfo &LI_) { LI = &LI_; }
 
   void declareRuntime() {
     for (auto e : PrefetcherRuntime::Functions) {
@@ -218,8 +242,8 @@ public:
       auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
                                           args, "", insertPt->getNextNode());
 
-//      emitSimUserPFSetParam(*(call->getNextNode()));
-//      emitSimUserPFSetEnable(*(call->getNextNode()));
+      //      emitSimUserPFSetParam(*(call->getNextNode()));
+      //      emitSimUserPFSetEnable(*(call->getNextNode()));
     }
   }
 
@@ -254,8 +278,8 @@ public:
                                      insertPt->getNextNode());
 
           TriggerEdgeCount++;
-//          emitSimUserPFSetParam(*(call->getNextNode()));
-//          emitSimUserPFSetEnable(*(call->getNextNode()));
+          //          emitSimUserPFSetParam(*(call->getNextNode()));
+          //          emitSimUserPFSetEnable(*(call->getNextNode()));
         }
       }
     }
