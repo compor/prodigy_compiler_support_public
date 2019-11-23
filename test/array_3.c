@@ -28,30 +28,29 @@ void test(uint32_t * a, uint32_t * b, uint32_t *c)
 
 int main(/*int argc, char * argv[]*/)
 {
-	int size0 = 5, size1 = 5;
-	int size2 = size0 + size1;
-	uint32_t * a = myIntMallocFn32(size2);
-	uint32_t * b = myIntMallocFn32(10);
-	uint32_t * c = myIntMallocFn32(10);
-	uint32_t * d = myIntMallocFn32(10);
-	uint64_t * e = (uint64_t*)myIntMallocFn64(10);
-	int * f = (int*)malloc(10 * sizeof(int));
-	int * g = (int*)malloc(10 * sizeof(int));
+  int size = 1000;
+	uint32_t * a = myIntMallocFn32(size);
+	uint32_t * b = myIntMallocFn32(size);
+	uint32_t * c = myIntMallocFn32(size);
+	uint32_t * d = myIntMallocFn32(size);
+	uint64_t * e = (uint64_t*)myIntMallocFn64(size);
+	int * f = (int*)malloc(size * sizeof(int));
+	int * g = (int*)malloc(size * sizeof(int));
 
 	// initialize data structures
-	initialize(a,10);
-	initialize(b,10);
-	initialize(c,10);
-	initialize(d,10);
+	initialize(a,size);
+	initialize(b,size);
+	initialize(c,size);
+	initialize(d,size);
 
 	sim_roi_start();
 
 	// indirection of the type A[B[i]]
-	for(int i = 0; i < 10; ++i) {
+	for(int i = 0; i < size; ++i) {
 		*(f+i) = (uint64_t)b[a[i]];
 	}
 
-	for(int i = 0; i < 10; ++i) {
+	for(int i = 0; i < size; ++i) {
 		*(g+i) = (uint64_t)d[c[i]];
 	}
 
