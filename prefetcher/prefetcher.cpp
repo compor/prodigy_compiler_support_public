@@ -300,8 +300,8 @@ void identifyGEPDependence(Function &F,
               printVector("\n  is used by:\n", uses.begin(), uses.end());
               errs() << "\n";
               GEPDepInfo g;
-              g.source = I;
-              g.target = U;
+              g.source = I->getOperand(0);
+              g.target = U->getOperand(0);
 
               errs() << "source: " << *(g.source) << "\n";
               errs() << "target: " << *(g.target) << "\n";

@@ -56,8 +56,16 @@ struct myAllocCallInfo {
 };
 
 struct GEPDepInfo {
-  llvm::Instruction *source;
-  llvm::Instruction *target;
+  llvm::Value *source;
+  llvm::Value *target;
+
+  bool operator<(const GEPDepInfo &Other) const {
+	  return source < Other.source && target < Other.target;
+  }
+
+  bool operator==(const GEPDepInfo &Other) const {
+  	  return source == Other.source && target == Other.target;
+  }
 };
 
 struct PrefetcherAnalysisResult {
