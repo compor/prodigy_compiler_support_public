@@ -144,10 +144,7 @@ class PrefetcherCodegen {
 	llvm::LoopInfo *LI;
 	unsigned long NodeCount;
 	unsigned long TriggerEdgeCount;
-	llvm::SmallPtrSet<llvm::Value *, 4> emittedNodes;
-	llvm::SmallSet<struct GEPDepInfo, 4> emittedTravEdges;
-	llvm::SmallPtrSet<llvm::Value *, 4> emittedTrigEdges;
-	std::map<llvm::Value *, llvm::Instruction *> insertPts;
+
 
 
 	llvm::Instruction *findInsertionPointBeforeLoopNest(llvm::Instruction &I) {
@@ -161,8 +158,13 @@ class PrefetcherCodegen {
 	}
 
 public:
+	llvm::SmallPtrSet<llvm::Value *, 4> emittedNodes;
+	llvm::SmallSet<struct GEPDepInfo, 4> emittedTravEdges;
+	llvm::SmallPtrSet<llvm::Value *, 4> emittedTrigEdges;
+	std::map<llvm::Value *, llvm::Instruction *> insertPts;
+
 	PrefetcherCodegen(llvm::Module &M)
-: Mod(&M), LI(nullptr), NodeCount(0), TriggerEdgeCount(0){};
+	: Mod(&M), LI(nullptr), NodeCount(0), TriggerEdgeCount(0){};
 
 	void setLoopInfo(llvm::LoopInfo &LI_) { LI = &LI_; }
 
@@ -264,6 +266,35 @@ public:
 		}
 	}
 
+	void emitRegisterTravEdge2(GEPDepInfo &gdi, llvm::Instruction *InsertPt) {
+		if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
+			llvm::SmallVector<llvm::Value *, 4> args;
+
+			args.push_back(gdi.source);
+			args.push_back(gdi.target);
+
+			args.push_back(llvm::ConstantInt::get(
+					llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
+
+			llvm::errs() << "Emitting!\n";
+
+			llvm::errs() << *(gdi.source) << "\n";
+			llvm::errs() << *(gdi.target) << "\n";
+
+			llvm::errs() << "Done Emitting!\n";
+
+
+
+			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+					args, "", InsertPt);
+
+			//      emitSimUserPFSetParam(*(call->getNextNode()));
+			//      emitSimUserPFSetEnable(*(call->getNextNode()));
+
+			emittedTravEdges.insert(gdi);
+		}
+	}
+
 	// If a node is a source but not a target, then it is a trigger node.
 	void emitRegisterTrigEdge(llvm::SmallVector<GEPDepInfo, 8> &geps) {
 		GEPDepInfo *current_trigger;
@@ -293,6 +324,49 @@ public:
 								llvm::IntegerType::get(Mod->getContext(), 32), NeverSquash));
 
 						auto *insertPt = insertPts[gdi.source];
+						auto *call =
+								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+										insertPt->getNextNode());
+
+						TriggerEdgeCount++;
+						//          emitSimUserPFSetParam(*(call->getNextNode()));
+						//          emitSimUserPFSetEnable(*(call->getNextNode()));
+
+						emittedTrigEdges.insert(gdi.source);
+					}
+				}
+			}
+		}
+	}
+
+	void emitRegisterTrigEdge2(llvm::SmallVector<GEPDepInfo, 8> &geps, llvm::Function &CurFunc) {
+		GEPDepInfo *current_trigger;
+
+		for (auto &gdi : geps) {
+			bool trigger_node = true;
+			for (auto &gdi2 : geps) {
+				if (gdi.source == gdi2.target) {
+					trigger_node = false;
+				}
+			}
+
+			if (trigger_node) {
+
+				if(!emittedTrigEdges.count(gdi.source)) {
+
+					if (auto *func =
+							Mod->getFunction(PrefetcherRuntime::RegisterTrigEdge1)) {
+						llvm::SmallVector<llvm::Value *, 4> args;
+						args.push_back(gdi.source);
+						args.push_back(gdi.source);
+
+						args.push_back(llvm::ConstantInt::get(
+								llvm::IntegerType::get(Mod->getContext(), 32), UpToOffset));
+
+						args.push_back(llvm::ConstantInt::get(
+								llvm::IntegerType::get(Mod->getContext(), 32), NeverSquash));
+
+						auto *insertPt = CurFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
 						auto *call =
 								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
 										insertPt->getNextNode());
@@ -449,6 +523,27 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		pfcg.emitRegisterTrigEdge(pfa.geps);
+
+		//
+
+		for (GEPDepInfo & gdi : pfa.geps) {
+			if(pfcg.emittedTravEdges.count(gdi) == 0) {
+				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+				}
+				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					assert(false);
+				}
+				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					assert(false);
+				}
+				else {
+					assert(false);
+				}
+			}
+		}
+
+		pfcg.emitRegisterTrigEdge2(pfa.geps, curFunc);
 	}
 
 	if (auto *mainFn = CurMod.getFunction("main")) {
@@ -458,7 +553,6 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
 		pfcg.emitCreateEnable(*I);
 	}
-
 	return hasModuleChanged;
 }
 
