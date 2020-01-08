@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.7)
 project(hello-transformation)
 
+cmake_policy(SET CMP0077 NEW)
+
 #find_package(LLVM 7.0.0 REQUIRED CONFIG)
 find_package(LLVM REQUIRED CONFIG)
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
