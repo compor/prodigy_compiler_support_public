@@ -355,7 +355,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 // false, [> Only looks at CFG <]
 // true [> Analysis Pass <]);
 
-char PrefetcherPass::ID = 0; // Initialization value not important
+char PrefetcherPass::ID = 0;
 
 static llvm::RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
                                             false, false);

@@ -456,15 +456,15 @@ Y("prefetcher-codegen", "Prefetcher Codegen Pass", false, false);
 
 static void
 registerPrefetcherCodegenPass(const llvm::PassManagerBuilder &Builder,
-		llvm::legacy::PassManagerBase &PM) {
-	PM.add(new PrefetcherCodegenPass());
+    llvm::legacy::PassManagerBase &PM) {
+  PM.add(new PrefetcherCodegenPass());
 
-	return;
+  return;
 }
 
 static llvm::RegisterStandardPasses
 RegisterPrefetcherCodegenPass(llvm::PassManagerBuilder::EP_EarlyAsPossible,
-		registerPrefetcherCodegenPass);
+    registerPrefetcherCodegenPass);
 
 //
 

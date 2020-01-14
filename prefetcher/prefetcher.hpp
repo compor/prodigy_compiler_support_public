@@ -86,22 +86,24 @@ template <typename T> void printVector(std::string inStr, T begin, T end) {
   errs() << ">\n";
 }
 
-struct PrefetcherPass : public FunctionPass {
+class PrefetcherPass : public llvm::FunctionPass {
+public:
   static char ID;
 
   using ResultT = PrefetcherAnalysisResult;
 
   ResultT Result;
 
-  PrefetcherPass() : FunctionPass(ID) {}
+  PrefetcherPass() : llvm::FunctionPass(ID) {}
 
   const ResultT &getPFA() const { return Result; }
 
   ResultT &getPFA() { return Result; }
 
-  virtual void getAnalysisUsage(AnalysisUsage &AU) const override;
+  virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
   bool runOnFunction(llvm::Function &F) override;
 };
+
 
 #endif // PREFETCHER_HPP_
