@@ -320,10 +320,10 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
   AU.addRequired<TargetLibraryInfoWrapperPass>();
   AU.addRequired<MemorySSAWrapperPass>();
   AU.addRequired<DependenceAnalysisWrapperPass>();
+  AU.setPreservesAll();
 }
 
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
-
   Result.allocs.clear();
   auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
 
