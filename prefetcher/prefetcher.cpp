@@ -38,16 +38,8 @@ void identifyNew(llvm::Function &F,
 
       if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
         if (f->getName().equals("_Znam")) {
-          //					errs() << "Alloc: " << I <<
-          //"\n"; 					errs() << "Argument0:"
-          //<<
-          //*(CS.getArgOperand(0)) << "\n";
-          // myAllocCallInfo
-          // allocInfo; allocInfo.allocInst = &I;
-          // allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
-          //							CS.args().begin(),
-          // CS.args().end());
-          // allocInfos.push_back(allocInfo);
+	  errs() << "New Array Alloc: " << I << "\n";
+	  errs() << "Argument0:" << *(CS.getArgOperand(0));
         }
       }
     }
@@ -329,7 +321,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
   identifyAlloc(Result.allocs, F, &TLI);
   //	identifyMalloc(F, Result.allocs);
-  //	identifyNew(F, Result.allocs);
+  identifyNew(F, Result.allocs);
   identifyGEPDependence(F, Result.geps);
 
   return false;
