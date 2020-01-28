@@ -1,0 +1,37 @@
+Single Valued Indirection Pass for BFS
+Written by Tarunesh Verma (tarunesh@umich.edu)
+11-21-2019
+
+Files Include
+  Single Valued Indirection Pass - put these in LLVM and build
+    SinValIndirection.cpp
+    CMakeLists.txt
+  BFS IR
+    bfs-ir.bc
+
+Command to generate the IR: 
+  clang -stdlib=libc++ -std=c++11 -I/usr/lib/gcc/x86_64-linux-gnu/7.1.0/include/ -I./../sniper6.1/include -Wall -emit-llvm -c -S bfs.cc -o bfs-ir.bc
+Command to run the pass:
+  opt -load <path-to-llvm-pass>/LLVMSinValIndirection.so -SinValIndirection < <path-to-ir>/bfs-ir.bc > /dev/null
+
+Output Expected
+    Single Valued Indirection in function TDStep
+      %0 = load i32*, i32** %shared, align 8
+      %0 = load i32**, i32*** %g_index_, align 8
+    
+    Single Valued Indirection in function TDStep
+      %0 = load i32**, i32*** %g_index_, align 8
+      %this1 = load %class.pvector*, %class.pvector** %this.addr, align 8
+    
+    Single Valued Indirection in function BFSVerifier
+      %0 = load i32**, i32*** %g_index_, align 8
+      %this1 = load %class.pvector*, %class.pvector** %this.addr, align 8
+    
+    Single Valued Indirection in function BFSVerifier
+      %0 = load i32**, i32*** %g_index_, align 8
+      %this1 = load %class.pvector*, %class.pvector** %this.addr, align 8
+    
+    Single Valued Indirection in function BFSVerifier
+      %0 = load i32**, i32*** %g_index_, align 8
+      %this1 = load %class.pvector*, %class.pvector** %this.addr, align 8
+
