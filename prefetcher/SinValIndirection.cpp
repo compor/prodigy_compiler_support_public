@@ -7,6 +7,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 #include "llvm/Analysis/CallGraph.h"
+#include "llvm/IR/CallSite.h"
 
 #include <string.h>
 

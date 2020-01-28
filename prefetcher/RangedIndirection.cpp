@@ -35,7 +35,7 @@ struct InstructionSet
   Instruction *addrValueLoad;
 };
 
-bool getUserFromInstrType(Instruction &I, std::vector<Instruction *> &uses, const char *InstrType) {
+bool getUserFromInstrTypeRI(Instruction &I, std::vector<Instruction *> &uses, const char *InstrType) {
 	bool ret = false;
 
 	for (auto &u: I.uses()) {
@@ -46,7 +46,7 @@ bool getUserFromInstrType(Instruction &I, std::vector<Instruction *> &uses, cons
 			uses.push_back(user);
 		}
 
-		ret |= getUserFromInstrType(*user,uses, InstrType);
+		ret |= getUserFromInstrTypeRI(*user,uses, InstrType);
 	}
 
 	return ret;
@@ -96,7 +96,7 @@ struct RangedIndirection : public ModulePass {
                         if (!strcmp(load3->getOpcodeName(), "load"))
                         {
                           std::vector<Instruction *> uses;
-                          if(getUserFromInstrType(*load0, uses, "ret"))
+                          if(getUserFromInstrTypeRI(*load0, uses, "ret"))
                           {
                             BaseAddressBlock baseAddrBlk = {load1->getFunction(), load1};
                             baseAddrBlkAi.push_back(baseAddrBlk);
@@ -146,7 +146,7 @@ struct RangedIndirection : public ModulePass {
     for (auto i : ranIndBlkCallSitesAi)
     {
       std::vector<Instruction *> uses;
-      if(getUserFromInstrType(*(i.first), uses, "store"))
+      if(getUserFromInstrTypeRI(*(i.first), uses, "store"))
       {
         Function *callSiteFunction = (i.first)->getFunction();
         std::vector<InstructionSet> localLoads;
@@ -166,7 +166,7 @@ struct RangedIndirection : public ModulePass {
         for (auto j : localLoads)
         {
           std::vector<Instruction *> localStores;
-          if(getUserFromInstrType(*(j.currentInstr), localStores, "store"))
+          if(getUserFromInstrTypeRI(*(j.currentInstr), localStores, "store"))
           {
             RangedIndirectionBlock ranIndBlk = {callSiteFunction, i.first, 
               (i.first)->getPrevNonDebugInstruction(), 
@@ -218,7 +218,7 @@ struct RangedIndirection : public ModulePass {
                           if (!strcmp(load3->getOpcodeName(), "load"))
                           {
                             std::vector<Instruction *> uses;
-                            if(getUserFromInstrType(*load0, uses, "ret"))
+                            if(getUserFromInstrTypeRI(*load0, uses, "ret"))
                             {
                               BaseAddressBlock baseAddrBlk = {load1->getFunction(), load1};
                               baseAddrBlkAi1.push_back(baseAddrBlk);
@@ -269,7 +269,7 @@ struct RangedIndirection : public ModulePass {
     for (auto i : ranIndBlkCallSitesAi1)
     {
       std::vector<Instruction *> uses;
-      if(getUserFromInstrType(*(i.first), uses, "store"))
+      if(getUserFromInstrTypeRI(*(i.first), uses, "store"))
       {
         Function *callSiteFunction = (i.first)->getFunction();
 
