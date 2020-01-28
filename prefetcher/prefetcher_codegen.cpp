@@ -560,6 +560,7 @@ void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequired<LoopInfoWrapperPass>();
 	AU.addRequired<PrefetcherPass>();
 	AU.addRequired<SinValIndirectionPass>();
+	AU.addRequired<RangedIndirectionPass>();
 	AU.setPreservesCFG();
 
 	return;

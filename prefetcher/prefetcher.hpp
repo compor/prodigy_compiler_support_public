@@ -114,7 +114,18 @@ public:
 
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
-	virtual llvm::Pass* createPrinterPass(raw_ostream &OS, const std::string &Banner ) const override;
+//	virtual llvm::Pass* createPrinterPass(raw_ostream &OS, const std::string &Banner ) const override;
 
+};
+
+struct RangedIndirectionPass : public ModulePass {
+  static char ID;
+  RangedIndirectionPass() : ModulePass(ID) {}
+
+  bool runOnModule(Module &M) override;
+
+  virtual void getAnalysisUsage(AnalysisUsage &AU) const override;
+
+  bool getUserFromInstrTypeRI(Instruction &I, std::vector<Instruction *> &uses, const char *InstrType);
 };
 #endif // PREFETCHER_HPP_
