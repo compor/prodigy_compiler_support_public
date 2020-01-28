@@ -51,27 +51,27 @@ class Instruction;
 }; // namespace llvm
 
 struct myAllocCallInfo {
-  llvm::Instruction *allocInst;
-  llvm::SmallVector<llvm::Value *, 3> inputArguments;
+	llvm::Instruction *allocInst;
+	llvm::SmallVector<llvm::Value *, 3> inputArguments;
 };
 
 struct GEPDepInfo {
-  llvm::Value *source;
-  llvm::Value *target;
+	llvm::Value *source;
+	llvm::Value *target;
 
-  bool operator<(const GEPDepInfo &Other) const {
-	  return source < Other.source && target < Other.target;
-  }
+	bool operator<(const GEPDepInfo &Other) const {
+		return source < Other.source && target < Other.target;
+	}
 
-  bool operator==(const GEPDepInfo &Other) const {
-  	  return source == Other.source && target == Other.target;
-  }
+	bool operator==(const GEPDepInfo &Other) const {
+		return source == Other.source && target == Other.target;
+	}
 };
 
 struct PrefetcherAnalysisResult {
-  llvm::SmallVector<myAllocCallInfo, 8> allocs;
-  llvm::SmallVector<GEPDepInfo, 8> geps;
-  // TODO: Kuba add results from edge analysis
+	llvm::SmallVector<myAllocCallInfo, 8> allocs;
+	llvm::SmallVector<GEPDepInfo, 8> geps;
+	// TODO: Kuba add results from edge analysis
 };
 
 using namespace llvm;
@@ -79,31 +79,42 @@ using namespace llvm;
 // ***** helper function to print vectors ****** //
 // This version of the function takes a vector of T* as input
 template <typename T> void printVector(std::string inStr, T begin, T end) {
-  errs() << inStr << ": < ";
-  for (auto it = begin; it != end; ++it) {
-    errs() << **it << " ";
-  }
-  errs() << ">\n";
+	errs() << inStr << ": < ";
+	for (auto it = begin; it != end; ++it) {
+		errs() << **it << " ";
+	}
+	errs() << ">\n";
 }
 
 class PrefetcherPass : public llvm::FunctionPass {
 public:
-  static char ID;
+	static char ID;
 
-  using ResultT = PrefetcherAnalysisResult;
+	using ResultT = PrefetcherAnalysisResult;
 
-  ResultT Result;
+	ResultT Result;
 
-  PrefetcherPass() : llvm::FunctionPass(ID) {}
+	PrefetcherPass() : llvm::FunctionPass(ID) {}
 
-  const ResultT &getPFA() const { return Result; }
+	const ResultT &getPFA() const { return Result; }
 
-  ResultT &getPFA() { return Result; }
+	ResultT &getPFA() { return Result; }
 
-  virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
-  bool runOnFunction(llvm::Function &F) override;
+	bool runOnFunction(llvm::Function &F) override;
 };
 
+struct SinValIndirectionPass : public ModulePass {
+public:
+	static char ID;
+	SinValIndirectionPass() : ModulePass(ID) {}
 
+	bool runOnModule(Module &M) override;
+
+	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+
+	virtual llvm::Pass* createPrinterPass(raw_ostream &OS, const std::string &Banner ) const override;
+
+};
 #endif // PREFETCHER_HPP_

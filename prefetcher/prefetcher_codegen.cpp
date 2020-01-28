@@ -559,6 +559,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequired<LoopInfoWrapperPass>();
 	AU.addRequired<PrefetcherPass>();
+	AU.addRequired<SinValIndirectionPass>();
 	AU.setPreservesCFG();
 
 	return;

@@ -1,3 +1,3 @@
 #!/bin/bash
 
-opt -load build/prefetcher/LLVMPrefetcher.so -prefetcher test/array_2
+opt -load build/prefetcher/LLVMPrefetcher.so -prefetcher-codegen test/array_2
