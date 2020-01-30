@@ -273,10 +273,15 @@ bool SinValIndirectionPass::runOnModule(Module &M) {
 		}
 	}
 
-	for (auto i : sinValIndExport)
+	for (auto i : sinValIndExport) {
 		errs() << "Single Valued Indirection in function " << i.function->getName() << "\n"
 		<< *(i.loadDS1) << "\n" << *(i.loadDS2) << "\n\n";
 
+		GEPDepInfo g;
+		g.source = i.loadDS1->getOperand(0);
+		g.target = i.loadDS2->getOperand(0);
+		Result.geps.push_back(g);
+	}
 	return false;
 }
 

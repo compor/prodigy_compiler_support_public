@@ -108,6 +108,12 @@ public:
 struct SinValIndirectionPass : public ModulePass {
 public:
 	static char ID;
+
+	using ResultT = PrefetcherAnalysisResult;
+	ResultT Result;
+	const ResultT &getPFA() const { return Result; }
+	ResultT &getPFA() { return Result; }
+
 	SinValIndirectionPass() : ModulePass(ID) {}
 
 	bool runOnModule(Module &M) override;
