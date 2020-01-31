@@ -456,15 +456,15 @@ Y("prefetcher-codegen", "Prefetcher Codegen Pass", false, false);
 
 static void
 registerPrefetcherCodegenPass(const llvm::PassManagerBuilder &Builder,
-    llvm::legacy::PassManagerBase &PM) {
-  PM.add(new PrefetcherCodegenPass());
+		llvm::legacy::PassManagerBase &PM) {
+	PM.add(new PrefetcherCodegenPass());
 
-  return;
+	return;
 }
 
 static llvm::RegisterStandardPasses
 RegisterPrefetcherCodegenPass(llvm::PassManagerBuilder::EP_EarlyAsPossible,
-    registerPrefetcherCodegenPass);
+		registerPrefetcherCodegenPass);
 
 //
 
@@ -497,18 +497,9 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 	unsigned totalNodesNum = 0;
 	unsigned totalEdgesNum = 0;
 
-	for (llvm::Function &curFunc : CurMod) {
-		if (shouldSkip(curFunc)) {
-			DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
-					<< curFunc.getName() << '\n';);
-			continue;
-		}
-
-		DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "processing func: "
-				<< curFunc.getName() << '\n';);
-
+	for (auto &func : CurMod) {
 		PrefetcherAnalysisResult &pfa =
-				this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
+				this->getAnalysis<PrefetcherPass>(func).getPFA();
 
 		for (auto &ai : pfa.allocs) {
 			if (ai.allocInst) {
@@ -523,44 +514,44 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		pfcg.emitRegisterTrigEdge(pfa.geps);
-
-		//
-
-		for (GEPDepInfo & gdi : pfa.geps) {
-			if(pfcg.emittedTravEdges.count(gdi) == 0) {
-				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
-				}
-				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					assert(false);
-				}
-				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					assert(false);
-				}
-				else {
-					assert(false);
-				}
-			}
-		}
-
-		pfcg.emitRegisterTrigEdge2(pfa.geps, curFunc);
 	}
 
-	if (auto *mainFn = CurMod.getFunction("main")) {
-		llvm::BasicBlock &bb = mainFn->getEntryBlock();
-		llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
+	//
 
-		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
-		pfcg.emitCreateEnable(*I);
-	}
+	//	for (GEPDepInfo & gdi : pfa.geps) {
+	//		if(pfcg.emittedTravEdges.count(gdi) == 0) {
+	//			if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+	//				// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
+	//				pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+	//			}
+	//			else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+	//				assert(false);
+	//			}
+	//			else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+	//				assert(false);
+	//			}
+	//			else {
+	//				assert(false);
+	//			}
+	//		}
+	//	}
+	//
+	//	pfcg.emitRegisterTrigEdge2(pfa.geps, curFunc);
+	//
+	//	if (auto *mainFn = CurMod.getFunction("main")) {
+	//		llvm::BasicBlock &bb = mainFn->getEntryBlock();
+	//		llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
+	//
+	//		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
+	//		pfcg.emitCreateEnable(*I);
+	//	}
 	return hasModuleChanged;
 }
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-	AU.addRequired<LoopInfoWrapperPass>();
 	AU.addRequired<PrefetcherPass>();
+	AU.addRequired<LoopInfoWrapperPass>();
 	AU.addRequired<SinValIndirectionPass>();
-	AU.addRequired<RangedIndirectionPass>();
 	AU.setPreservesCFG();
 
 	return;

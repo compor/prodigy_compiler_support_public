@@ -58,6 +58,7 @@ struct myAllocCallInfo {
 struct GEPDepInfo {
 	llvm::Value *source;
 	llvm::Value *target;
+	llvm::Function *func;
 
 	bool operator<(const GEPDepInfo &Other) const {
 		return source < Other.source && target < Other.target;
@@ -105,23 +106,23 @@ public:
 	bool runOnFunction(llvm::Function &F) override;
 };
 
-struct SinValIndirectionPass : public ModulePass {
+class SinValIndirectionPass : public llvm::ModulePass {
 public:
 	static char ID;
 
 	using ResultT = PrefetcherAnalysisResult;
+
 	ResultT Result;
+
 	const ResultT &getPFA() const { return Result; }
+
 	ResultT &getPFA() { return Result; }
 
 	SinValIndirectionPass() : ModulePass(ID) {}
 
-	bool runOnModule(Module &M) override;
-
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 
-//	virtual llvm::Pass* createPrinterPass(raw_ostream &OS, const std::string &Banner ) const override;
-
+	bool runOnModule(Module &M) override;
 };
 
 struct RangedIndirectionPass : public ModulePass {
