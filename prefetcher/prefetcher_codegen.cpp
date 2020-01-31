@@ -444,7 +444,7 @@ public:
 
 char PrefetcherCodegenPass::ID = 0;
 static llvm::RegisterPass<PrefetcherCodegenPass>
-Y("prefetcher-codegen", "Prefetcher Codegen Pass", false, false);
+Y("prefetcher-codegen", "Prefetcher Codegen Pass", false, true);
 
 // plugin registration for clang
 
@@ -483,6 +483,8 @@ static bool shouldSkip(llvm::Function &CurFunc) {
 		return true;
 	}
 
+	llvm::outs() << "NAME:\n";
+	llvm::outs() << CurFunc.getName();
 	return false;
 }
 
@@ -497,15 +499,25 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 	unsigned totalNodesNum = 0;
 	unsigned totalEdgesNum = 0;
 
-	for (auto &func : CurMod) {
-		PrefetcherAnalysisResult &pfa =
-				this->getAnalysis<PrefetcherPass>(func).getPFA();
+	for (llvm::Function &curFunc : CurMod) {
+		if (shouldSkip(curFunc)) {
+			DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
+					<< curFunc.getName() << '\n';);
+			continue;
+		}
 
-		for (auto &ai : pfa.allocs) {
+		DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "processing func: "
+				<< curFunc.getName() << '\n';);
+
+		PrefetcherAnalysisResult * pfa =
+				this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
+
+
+		for (auto &ai : pfa->allocs) {
 			if (ai.allocInst) {
 				pfcg.emitRegisterNode(ai);
 
-				for (GEPDepInfo &gdi : pfa.geps) {
+				for (GEPDepInfo &gdi : pfa->geps) {
 					pfcg.emitRegisterTravEdge(gdi);
 					totalEdgesNum++;
 				}
@@ -513,7 +525,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 			totalNodesNum++;
 		}
 
-		pfcg.emitRegisterTrigEdge(pfa.geps);
+		pfcg.emitRegisterTrigEdge(pfa->geps);
 	}
 
 	//
@@ -549,9 +561,10 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 }
 
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
-	AU.addRequired<PrefetcherPass>();
+	AU.addRequiredTransitive<PrefetcherPass>();
 	AU.addRequired<LoopInfoWrapperPass>();
-	AU.addRequired<SinValIndirectionPass>();
+	AU.addRequiredTransitive<SinValIndirectionPass>();
+	AU.addRequiredTransitive<RangedIndirectionPass>();
 	AU.setPreservesCFG();
 
 	return;

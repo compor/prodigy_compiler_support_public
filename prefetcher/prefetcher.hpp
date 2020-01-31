@@ -93,13 +93,15 @@ public:
 
 	using ResultT = PrefetcherAnalysisResult;
 
-	ResultT Result;
+	ResultT * Result;
 
-	PrefetcherPass() : llvm::FunctionPass(ID) {}
+	PrefetcherPass() : llvm::FunctionPass(ID) {Result = new ResultT();}
 
-	const ResultT &getPFA() const { return Result; }
+	~PrefetcherPass(){delete Result;}
 
-	ResultT &getPFA() { return Result; }
+	const ResultT *getPFA() const { return Result; }
+
+	ResultT *getPFA() { return Result; }
 
 	virtual void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
 

@@ -27,142 +27,145 @@ namespace {
 
 // TODO: Extract information from new
 void identifyNew(llvm::Function &F,
-                 llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
-  for (llvm::BasicBlock &BB : F) {
-    for (llvm::Instruction &I : BB) {
-      llvm::CallSite CS(&I);
-      if (!CS.getInstruction()) {
-        continue;
-      }
-      llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
+		llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			llvm::CallSite CS(&I);
+			if (!CS.getInstruction()) {
+				continue;
+			}
+			llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
 
-      if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
-        if (f->getName().equals("_Znam")) {
-	  errs() << "New Array Alloc: " << I << "\n";
-	  errs() << "Argument0:" << *(CS.getArgOperand(0));
-        }
-      }
-    }
-  }
+			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
+				if (f->getName().equals("_Znam")) {
+					errs() << "New Array Alloc: " << I << "\n";
+					errs() << "Argument0:" << *(CS.getArgOperand(0));
+				}
+			}
+		}
+	}
 }
 
 bool usedInLoad(llvm::Instruction *I) {
-  for (auto &u : I->uses()) {
-    auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+	for (auto &u : I->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
-    if (user->getOpcode() == Instruction::Load) {
-      return true;
-    }
-  }
+		if (user->getOpcode() == Instruction::Load) {
+			return true;
+		}
+	}
 
-  return false;
+	return false;
 }
 
 bool inArray(Instruction *I, std::vector<Instruction *> vec) {
-  for (auto *v : vec) {
-    if (I == v) {
-      return true;
-    }
-  }
+	for (auto *v : vec) {
+		if (I == v) {
+			return true;
+		}
+	}
 
-  return false;
+	return false;
 }
 
 bool recurseUsesSilent(llvm::Instruction &I,
-                       std::vector<llvm::Instruction *> &uses) {
-  bool ret = false;
+		std::vector<llvm::Instruction *> &uses) {
+	bool ret = false;
 
-  for (auto &u : I.uses()) {
-    auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+	for (auto &u : I.uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
-    if (user->getOpcode() == Instruction::GetElementPtr) {
-      ret = true;
-      uses.push_back(user);
-    }
+		if (user->getOpcode() == Instruction::GetElementPtr) {
+			ret = true;
+			uses.push_back(user);
+		}
 
-    ret |= recurseUsesSilent(*user, uses);
-  }
+		ret |= recurseUsesSilent(*user, uses);
+	}
 
-  return ret;
+	return ret;
 }
 
 void identifyGEPDependence(Function &F,
-                           llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
+		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
 
-  std::vector<llvm::Instruction *> insns;
-  std::vector<llvm::Instruction *> loads;
+	std::vector<llvm::Instruction *> insns;
+	std::vector<llvm::Instruction *> loads;
 
-  for (llvm::BasicBlock &BB : F) {
-    for (llvm::Instruction &I : BB) {
-      // errs() << "I  :" << I << "\n";
-      if (I.getOpcode() == Instruction::GetElementPtr) {
-        insns.push_back(&I);
-        // errs() << "ins:" << I << "\n";
-      }
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			// errs() << "I  :" << I << "\n";
+			if (I.getOpcode() == Instruction::GetElementPtr) {
+				insns.push_back(&I);
+				// errs() << "ins:" << I << "\n";
+			}
 
-      if (I.getOpcode() == Instruction::Load) {
-        loads.push_back(&I);
-      }
+			if (I.getOpcode() == Instruction::Load) {
+				loads.push_back(&I);
+			}
 
-      if (I.getOpcode() == Instruction::Load) {
-        loads.push_back(&I);
-      }
-    }
-  }
+			if (I.getOpcode() == Instruction::Load) {
+				loads.push_back(&I);
+			}
+		}
+	}
 
-  std::vector<std::pair<llvm::Instruction *, llvm::Instruction *>>
-      dependentGEPs;
+	std::vector<std::pair<llvm::Instruction *, llvm::Instruction *>>
+	dependentGEPs;
 
-  if (insns.size() > 0) {
-    for (auto I : insns) {
-      if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
-        // usedInLoad()        finds if a GEP instruction is used in load
-        // recurseUsesSilent() finds if the GEP instruction is
-        //                     *eventually* used in another GEP instruction
-        // can detect loads of type A[B[i]]
-        // and does not detect stores of type A[B[i]]
+	if (insns.size() > 0) {
+		for (auto I : insns) {
+			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
+				// usedInLoad()        finds if a GEP instruction is used in load
+				// recurseUsesSilent() finds if the GEP instruction is
+				//                     *eventually* used in another GEP instruction
+				// can detect loads of type A[B[i]]
+				// and does not detect stores of type A[B[i]]
 
-        std::vector<llvm::Instruction *> uses;
+				std::vector<llvm::Instruction *> uses;
 
-        if (usedInLoad(I) && recurseUsesSilent(*I, uses)) {
-          for (auto U : uses) {
-            if (usedInLoad(U)) {
-              errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-              errs() << *I;
-              printVector("\n  is used by:\n", uses.begin(), uses.end());
-              errs() << "\n";
-              GEPDepInfo g;
-              g.source = I->getOperand(0);
-              g.target = U->getOperand(0);
+				if (usedInLoad(I) && recurseUsesSilent(*I, uses)) {
+					for (auto U : uses) {
+						if (usedInLoad(U)) {
+							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+							errs() << *I;
+							printVector("\n  is used by:\n", uses.begin(), uses.end());
+							errs() << "\n";
+							GEPDepInfo g;
+							g.source = I->getOperand(0);
+							g.target = U->getOperand(0);
 
-              errs() << "source: " << *(g.source) << "\n";
-              errs() << "target: " << *(g.target) << "\n";
-              gepInfos.push_back(g);
-            }
-          }
-        }
-      }
-    }
-  }
+							errs() << "source: " << *(g.source) << "\n";
+							errs() << "target: " << *(g.target) << "\n";
+							gepInfos.push_back(g);
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 } // namespace
 
 void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
-  AU.addRequired<TargetLibraryInfoWrapperPass>();
-  AU.addRequired<MemorySSAWrapperPass>();
-  AU.addRequired<DependenceAnalysisWrapperPass>();
-  AU.setPreservesAll();
+	AU.addRequired<TargetLibraryInfoWrapperPass>();
+	AU.addRequired<MemorySSAWrapperPass>();
+	AU.addRequired<DependenceAnalysisWrapperPass>();
+	AU.setPreservesAll();
 }
 
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
-  Result.allocs.clear();
-  auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
 
-  identifyNew(F, Result.allocs);
-//  identifyGEPDependence(F, Result.geps);
+	errs() << "PrefetcherPass: " << F.getName() << "\n";
 
-  return false;
+	Result->allocs.clear();
+	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
+
+	identifyNew(F, Result->allocs);
+	//  identifyGEPDependence(F, Result.geps);
+
+	return false;
 }
 
 /* End identify Custom malloc */
@@ -188,4 +191,4 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 char PrefetcherPass::ID = 0;
 
 static llvm::RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
-                                            false, false);
+		false, false);

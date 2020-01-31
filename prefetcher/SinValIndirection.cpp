@@ -277,6 +277,9 @@ bool SinValIndirectionPass::runOnModule(Module &M) {
 		errs() << "Single Valued Indirection in function " << i.function->getName() << "\n"
 		<< *(i.loadDS1) << "\n" << *(i.loadDS2) << "\n\n";
 
+		errs() << "SVID Function 1: " << i.loadDS1->getFunction()->getName() << "\n";
+		errs() << "SVID Function 2: " << i.loadDS2->getFunction()->getName() << "\n";
+
 		GEPDepInfo g;
 		g.source = i.loadDS1->getOperand(0);
 		g.target = i.loadDS2->getOperand(0);
@@ -290,7 +293,7 @@ void SinValIndirectionPass::getAnalysisUsage(AnalysisUsage &AU) const {
 }
 
 char SinValIndirectionPass::ID = 0;
-static RegisterPass<SinValIndirectionPass> X("SinValIndirectionPass", "Ranged Indirection for Project",
+static RegisterPass<SinValIndirectionPass> X("SinValIndirectionPass", "Single Value Indirection for Project",
 		false /* Only looks at CFG */,
 		false /* Analysis Pass */);
 
