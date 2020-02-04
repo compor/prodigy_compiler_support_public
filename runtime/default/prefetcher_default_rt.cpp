@@ -35,6 +35,12 @@ int sim_user_pf_disable();
 int delete_params();
 int delete_enable();
 
+// Profile
+int register_identify_edge(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f);
+int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id);
+int register_identify_edge_target(uintptr_t baseaddr_to, int edge_id);
+
+
 pf_params_t * params;
 pf_enable_t * enable;
 

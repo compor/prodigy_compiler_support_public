@@ -79,6 +79,9 @@ struct PrefetcherRuntime {
 	static constexpr char *CreateParams = "create_params";
 	static constexpr char *CreateEnable = "create_enable";
 	static constexpr char *RegisterNode = "register_node";
+	static constexpr char *RegisterIdentifyEdgeSource = "register_identify_edge_source";
+	static constexpr char *RegisterIdentifyEdgeTarget = "register_identify_edge_target";
+	static constexpr char *RegisterIdentifyEdge = "register_identify_edge";
 	static constexpr char *RegisterNodeWithSize = "register_node_with_size";
 	static constexpr char *RegisterTravEdge1 = "register_trav_edge1";
 	static constexpr char *RegisterTravEdge2 = "register_trav_edge2";
@@ -295,9 +298,45 @@ public:
 		}
 	}
 
+	void emitRegisterIdentifyEdge(llvm::SmallVector<GEPDepInfo,8> &geps) {
+
+		int edge_id_counter = 0;
+
+		for (auto &gdi : geps) {
+			// Emit Source
+			if (auto *func =
+					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeSource)) {
+				llvm::SmallVector<llvm::Value *, 2> args;
+				args.push_back(gdi.source);
+
+				args.push_back(llvm::ConstantInt::get(
+						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
+
+				auto *insertPt = insertPts[gdi.source];
+				auto *call =
+						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+								insertPt->getNextNode());
+			}
+
+			// Emit Target
+			if (auto *func =
+					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeTarget)) {
+				llvm::SmallVector<llvm::Value *, 2> args;
+				args.push_back(gdi.target);
+
+				args.push_back(llvm::ConstantInt::get(
+						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
+
+				auto *insertPt = insertPts[gdi.target];
+				auto *call =
+						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+								insertPt->getNextNode());
+			}
+		}
+	}
+
 	// If a node is a source but not a target, then it is a trigger node.
 	void emitRegisterTrigEdge(llvm::SmallVector<GEPDepInfo, 8> &geps) {
-		GEPDepInfo *current_trigger;
 
 		for (auto &gdi : geps) {
 			bool trigger_node = true;
@@ -525,6 +564,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 			totalNodesNum++;
 		}
 
+		pfcg.emitRegisterIdentifyEdge(pfa->geps);
 		pfcg.emitRegisterTrigEdge(pfa->geps);
 	}
 
