@@ -58,7 +58,8 @@ struct myAllocCallInfo {
 struct GEPDepInfo {
 	llvm::Value *source;
 	llvm::Value *target;
-	llvm::Function *func;
+	llvm::Function *funcSource;
+	llvm::Function *funcTarget;
 
 	bool operator<(const GEPDepInfo &Other) const {
 		return source < Other.source && target < Other.target;

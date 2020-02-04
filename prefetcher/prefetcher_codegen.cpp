@@ -103,6 +103,9 @@ struct PrefetcherRuntime {
 const std::vector<std::string> PrefetcherRuntime::Functions = {
 		PrefetcherRuntime::CreateParams,
 		PrefetcherRuntime::CreateEnable,
+		PrefetcherRuntime::RegisterIdentifyEdge,
+		PrefetcherRuntime::RegisterIdentifyEdgeSource,
+		PrefetcherRuntime::RegisterIdentifyEdgeTarget,
 		PrefetcherRuntime::RegisterNode,
 		PrefetcherRuntime::RegisterNodeWithSize,
 		PrefetcherRuntime::RegisterTravEdge1,
@@ -313,25 +316,26 @@ public:
 						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
 
 				auto *insertPt = insertPts[gdi.source];
+
 				auto *call =
 						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-								insertPt->getNextNode());
+								gdi.funcSource->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
 			}
 
 			// Emit Target
-			if (auto *func =
-					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeTarget)) {
-				llvm::SmallVector<llvm::Value *, 2> args;
-				args.push_back(gdi.target);
-
-				args.push_back(llvm::ConstantInt::get(
-						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
-
-				auto *insertPt = insertPts[gdi.target];
-				auto *call =
-						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-								insertPt->getNextNode());
-			}
+//			if (auto *func =
+//					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeTarget)) {
+//				llvm::SmallVector<llvm::Value *, 2> args;
+//				args.push_back(gdi.target);
+//
+//				args.push_back(llvm::ConstantInt::get(
+//						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
+//
+//				auto *insertPt = insertPts[gdi.target];
+//				auto *call =
+//						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+//								insertPt->getNextNode());
+//			}
 		}
 	}
 
@@ -565,46 +569,45 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		pfcg.emitRegisterIdentifyEdge(pfa->geps);
-		pfcg.emitRegisterTrigEdge(pfa->geps);
+//		pfcg.emitRegisterTrigEdge(pfa->geps);
+
+		for (GEPDepInfo & gdi : pfa->geps) {
+			if(pfcg.emittedTravEdges.count(gdi) == 0) {
+				// Check if both source and target are arguments (otherwise if not, then they are defined in the same function)
+				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
+					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+				}
+				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					assert(false);
+				}
+				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+					assert(false);
+				}
+				else {
+					assert(false);
+				}
+			}
+		}
+
+//		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
+
+		if (auto *mainFn = CurMod.getFunction("main")) {
+			llvm::BasicBlock &bb = mainFn->getEntryBlock();
+			llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
+
+			pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
+			pfcg.emitCreateEnable(*I);
+		}
 	}
-
-	//
-
-	//	for (GEPDepInfo & gdi : pfa.geps) {
-	//		if(pfcg.emittedTravEdges.count(gdi) == 0) {
-	//			if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-	//				// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
-	//				pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
-	//			}
-	//			else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-	//				assert(false);
-	//			}
-	//			else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-	//				assert(false);
-	//			}
-	//			else {
-	//				assert(false);
-	//			}
-	//		}
-	//	}
-	//
-	//	pfcg.emitRegisterTrigEdge2(pfa.geps, curFunc);
-	//
-	//	if (auto *mainFn = CurMod.getFunction("main")) {
-	//		llvm::BasicBlock &bb = mainFn->getEntryBlock();
-	//		llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
-	//
-	//		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
-	//		pfcg.emitCreateEnable(*I);
-	//	}
 	return hasModuleChanged;
-}
 
+}
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequiredTransitive<PrefetcherPass>();
 	AU.addRequired<LoopInfoWrapperPass>();
-	AU.addRequiredTransitive<SinValIndirectionPass>();
-	AU.addRequiredTransitive<RangedIndirectionPass>();
+	//	AU.addRequiredTransitive<SinValIndirectionPass>();
+	//	AU.addRequiredTransitive<RangedIndirectionPass>();
 	AU.setPreservesCFG();
 
 	return;
