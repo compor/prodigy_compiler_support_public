@@ -46,6 +46,31 @@ void identifyNew(llvm::Function &F,
 	}
 }
 
+void identifyMalloc(llvm::Function &F,
+                    llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
+  for (llvm::BasicBlock &BB : F) {
+    for (llvm::Instruction &I : BB) {
+      llvm::CallSite CS(&I);
+      if (!CS.getInstruction()) {
+        continue;
+      }
+      llvm::Value *called = CS.getCalledValue()->stripPointerCasts();
+
+      if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
+        if (f->getName().equals("malloc")) {
+          errs() << "Alloc: " << I << "\n";
+          errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+          myAllocCallInfo allocInfo;
+          allocInfo.allocInst = &I;
+          allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
+                                          CS.args().begin(), CS.args().end());
+          allocInfos.push_back(allocInfo);
+        }
+      }
+    }
+  }
+}
+
 bool usedInLoad(llvm::Instruction *I) {
 	for (auto &u : I->uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
@@ -162,6 +187,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	Result->allocs.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
 
+	identifyMalloc(F, Result->allocs);
 	identifyNew(F, Result->allocs);
 	//  identifyGEPDependence(F, Result.geps);
 
