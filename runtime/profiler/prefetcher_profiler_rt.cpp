@@ -85,34 +85,13 @@ public:
     NodeId id;
 };
 
-class profiler_edge_int
-{
-public:
-    profiler_edge_int(NodeId _from, NodeId _to, FuncId _f)
-    : from(_from)
-    , to(_to)
-    , f(_f)
-    { }
-
-    NodeId from;
-    NodeId to;
-    FuncId f;
-
-    void Print() const
-    {
-        printf("(%ld, %ld, %d)", from, to, f);
-    }
-};
-
 std::vector<profiler_node_int> nodes;
 
 uint64_t
 GetNodeIdFromBaseAddr(uint64_t baseaddr_from)
 {
     for(uint64_t i = 0; i < nodes.size(); ++i) {
-//    	fprintf(stderr, "%d %d %d\n", baseaddr_from, (uint64_t)(nodes[i].base), ((uint64_t)nodes[i].base)+nodes[i].size*nodes[i].type_size);
         if(baseaddr_from < ((uint64_t)nodes[i].base)+nodes[i].size*nodes[i].type_size && baseaddr_from >= (uint64_t)(nodes[i].base)) {
-//        	fprintf(stderr, "Node found.\n");
             return i;
         }
     }
@@ -124,7 +103,7 @@ int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id)
 	int err = 0;
 
 	uint64_t from = GetNodeIdFromBaseAddr(baseaddr_from);
-	fprintf(stderr, "PROFILE SOURCE %d, edge %d\n", from, edge_id);
+	fprintf(stderr, "PROFILER S %d %d\n", from, edge_id);
 
 	return err;
 }
@@ -132,7 +111,7 @@ int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id)
 int register_identify_edge_target(uintptr_t baseaddr_to, int edge_id)
 {
 	uint64_t to = GetNodeIdFromBaseAddr(baseaddr_to);
-	fprintf(stderr, "PROFILE TARGET %d, edge %d\n", to, edge_id);
+	fprintf(stderr, "PROFILER T %d %d\n", to, edge_id);
 	return 0;
 }
 
@@ -158,7 +137,6 @@ int register_node_with_size(void* base, int64_t size, int64_t elem_size, int64_t
 {
 	int err = 0;
 
-	fprintf(stderr, "%s\n", __FUNCTION__);
     nodes.push_back(profiler_node_int((uintptr_t)base, size, elem_size, node_id));
 
 	return err;
