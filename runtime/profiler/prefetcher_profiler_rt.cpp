@@ -8,9 +8,37 @@
 #ifndef INCLUDE_PF_C_INTERFACE_H_
 #define INCLUDE_PF_C_INTERFACE_H_
 
-#include <pf_interface.h>
-#include <sim_api.h>
+//#include <pf_interface.h>
+//#include <sim_api.h>
+#include <stdint.h>
 #include <vector>
+#include <stdio.h>
+
+typedef int64_t NodeId;
+
+enum FuncId
+{
+    // traversal functions registered
+    TraversalHolder,
+    BaseOffset_int32_t,
+    PointerBounds_int32_t,
+    PointerBounds_uint64_t,
+
+    // trigger functions registered
+    TriggerHolder,
+    UpToOffset,
+    StaticOffset_32,
+    StaticOffset_64,
+    StaticOffset_256,
+    StaticOffset_512,
+    StaticOffset_1024,
+
+    // squash functions registered
+    SquashIfLarger,
+    NeverSquash,
+
+    InvalidFuncId
+};
 
 extern "C" {
 
@@ -41,49 +69,97 @@ int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id);
 int register_identify_edge_target(uintptr_t baseaddr_to, int edge_id);
 
 
-pf_params_t * params;
-pf_enable_t * enable;
+class profiler_node_int
+{
+public:
+    profiler_node_int(uintptr_t _base, int64_t _size, int64_t _type_size, NodeId _id)
+    : base(_base)
+    , size(_size)
+    , type_size(_type_size)
+    , id(_id)
+    { }
+
+    uintptr_t base;
+    int64_t size;
+    int64_t type_size;
+    NodeId id;
+};
+
+class profiler_edge_int
+{
+public:
+    profiler_edge_int(NodeId _from, NodeId _to, FuncId _f)
+    : from(_from)
+    , to(_to)
+    , f(_f)
+    { }
+
+    NodeId from;
+    NodeId to;
+    FuncId f;
+
+    void Print() const
+    {
+        printf("(%ld, %ld, %d)", from, to, f);
+    }
+};
+
+std::vector<profiler_node_int> nodes;
+
+uint64_t
+GetNodeIdFromBaseAddr(uint64_t baseaddr_from)
+{
+    for(uint64_t i = 0; i < nodes.size(); ++i) {
+//    	fprintf(stderr, "%d %d %d\n", baseaddr_from, (uint64_t)(nodes[i].base), ((uint64_t)nodes[i].base)+nodes[i].size*nodes[i].type_size);
+        if(baseaddr_from < ((uint64_t)nodes[i].base)+nodes[i].size*nodes[i].type_size && baseaddr_from >= (uint64_t)(nodes[i].base)) {
+//        	fprintf(stderr, "Node found.\n");
+            return i;
+        }
+    }
+    return 0;
+}
+
+int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id)
+{
+	int err = 0;
+
+	uint64_t from = GetNodeIdFromBaseAddr(baseaddr_from);
+	fprintf(stderr, "PROFILE SOURCE %d, edge %d\n", from, edge_id);
+
+	return err;
+}
+
+int register_identify_edge_target(uintptr_t baseaddr_to, int edge_id)
+{
+	uint64_t to = GetNodeIdFromBaseAddr(baseaddr_to);
+	fprintf(stderr, "PROFILE TARGET %d, edge %d\n", to, edge_id);
+	return 0;
+}
+
 
 int
 print_params()
 {
-	params->Print();
 	return 0;
 }
 
 int create_params(int num_nodes_pf, int num_edges_pf, int num_triggers_pf)
 {
-	int params_id = 0;
-	params = new pf_params_t(num_nodes_pf, num_edges_pf, num_triggers_pf, 4);
-	printf("pf: &params = %p\n", params);
 
-	return params_id;
+	return 0;
 }
 
 int create_enable()
 {
-	int enable_id = 0;
-	enable = new pf_enable_t();
-	printf("pf: &enable = %p\n", enable);
-
-	return enable_id;
+	return 0;
 }
-//
-//template <typename T>
-//int register_node(T* base, int64_t size, int64_t node_id)
-//{
-//	int err = 0;
-//
-//	params->RegisterNode(base, size, node_id);
-//
-//	return err;
-//}
 
 int register_node_with_size(void* base, int64_t size, int64_t elem_size, int64_t node_id)
 {
 	int err = 0;
 
-	params->RegisterNodeWithSize(base, size, elem_size, node_id);
+	fprintf(stderr, "%s\n", __FUNCTION__);
+    nodes.push_back(profiler_node_int((uintptr_t)base, size, elem_size, node_id));
 
 	return err;
 }
@@ -91,130 +167,59 @@ int register_node_with_size(void* base, int64_t size, int64_t elem_size, int64_t
 int
 register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f)
 {
-	int err = 0;
-
-	(void) params->RegisterTravEdge(baseaddr_from, baseaddr_to, f);
-
-	return err;
+	return 0;
 }
 
 int
 register_trav_edge2(NodeId id_from, NodeId id_to, FuncId f)
 {
-	int err = 0;
-
-	(void) params->RegisterTravEdge(id_from, id_to, f);
-
-	return err;
+	return 0;
 }
 
 int register_trig_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f, FuncId sq_f)
 {
-	int err = 0;
-
-	params->RegisterTrigEdge(baseaddr_from, baseaddr_to, f, sq_f);
-
-	return err;
+	return 0;
 }
 
 int register_trig_edge2(NodeId id_from, NodeId id_to, FuncId f, FuncId sq_f)
 {
-	int err = 0;
-
-	params->RegisterTrigEdge(id_from, id_to, f, sq_f);
-
-	return err;
+	return 0;
 }
 
 int sim_user_pf_set_param()
 {
-	int err = 0;
-
-	SimUser(PF_SET_PARAM, (long unsigned int) params);
-	printf("pf: &params = %p\n", params);
-
-	return err;
+	return 0;
 }
 
 int sim_user_pf_set_enable()
 {
-	int err = 0;
-
-	SimUser(PF_SET_ENABLE, (long unsigned int) enable);
-	printf("pf: &enable = %p\n", enable);
-
-	return err;
+	return 0;
 }
 
 int sim_user_pf_enable()
 {
-	int err = 0;
-
-	SimUser(PF_ENABLE, (long unsigned int) enable);
-	printf("pf: &enable = %p\n", enable);
-
-	return err;
+	return 0;
 }
 
-/**
- * @brief Removes the traversal edge between the two defined
- *        nodes in the DIG
- *        NOTE: This only removes from the application representation
- *              and requires a sim_user_pf_set_param() call to
- *              push the changes to the simulator
- * @param baseaddr_from Base addr of the from node
- * @param baseaddr_to Base addr of the to node
- * @retval Int 0 on success
- */
 int
 pf_delete_trav(uintptr_t baseaddr_from, uintptr_t baseaddr_to)
 {
-	params->DeleteTravEdge(baseaddr_from, baseaddr_to);
 	return 0;
 }
 
-/**
- * @brief Removes the all traversal edges from DIG
- *        NOTE: This only removes from the application representation
- *              and requires a sim_user_pf_set_param() call to
- *              push the changes to the simulator
- * @retval Int 0 on success
- */
 int
 pf_clear_trav()
 {
-	params->ClearTravEdges();
 	return 0;
 }
 
-/**
- * @brief Removes the trigger edge between the two defined
- *        nodes in the DIG
- *        NOTE: This only removes from the application representation
- *              and requires a sim_user_pf_set_param() call to
- *              push the changes to the simulator
- * @param baseaddr_from Base addr of the from node
- * @param baseaddr_to Base addr of the to node
- * @retval Int 0 on success
- */
-int
-pf_delete_trig(uintptr_t baseaddr_from, uintptr_t baseaddr_to)
+int pf_delete_trig(uintptr_t baseaddr_from, uintptr_t baseaddr_to)
 {
-	params->DeleteTrigEdge(baseaddr_from, baseaddr_to);
 	return 0;
 }
 
-/**
- * @brief Removes the all trigger edges from DIG
- *        NOTE: This only removes from the application representation
- *              and requires a sim_user_pf_set_param() call to
- *              push the changes to the simulator
- * @retval Int 0 on success
- */
-int
-pf_clear_trig()
+int pf_clear_trig()
 {
-	params->ClearTrigEdges();
 	return 0;
 }
 
@@ -222,52 +227,31 @@ int sim_user_wait()
 {
 	int err = 0;
 
-	if (SimInSimulator() and !enable->is_enabled()) {
-		enable->wait();
-	}
-
 	return err;
 }
 
 int sim_roi_start()
 {
-	SimRoiStart();
-
-    printf("gapbs: bfs_enable_t @ %p\n", &enable); // don't ask why: absolutely need this print here
-                                                 // to pass correct address
-
-    // Can this be implicitly called by SimRoiStart? - Yes
-    SimUser(PF_ENABLE, (long unsigned int) &enable);
-
-    // And this as well? - Yes
-    if (SimInSimulator() and !enable->is_enabled()) {
-        enable->wait();
-    }
 	return 0;
 }
 
 int sim_roi_end()
 {
-	SimRoiEnd();
-	SimUser(PF_DISABLE,0);
 	return 0;
 }
 
 int sim_user_pf_disable()
 {
-	SimUser(PF_DISABLE,0);
 	return 0;
 }
 
 int delete_params()
 {
-	delete params;
 	return 0;
 }
 
 int delete_enable()
 {
-	delete enable;
 	return 0;
 }
 

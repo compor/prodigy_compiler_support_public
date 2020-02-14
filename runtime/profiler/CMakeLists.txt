@@ -4,7 +4,7 @@ set(PRJ_RT_NAME prefetcher_profiler_rt)
 
 set(SOURCES ${PRJ_RT_NAME}.cpp)
 
-add_library(${PRJ_RT_NAME} SHARED ${SOURCES})
+add_library(${PRJ_RT_NAME} STATIC ${SOURCES})
 
 #target_include_directories(${PRJ_RT_NAME} PUBLIC "../../../sniper6.1/include")
 
