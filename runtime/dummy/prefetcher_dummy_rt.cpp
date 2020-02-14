@@ -128,3 +128,19 @@ int delete_enable() {
   return 0;
 }
 
+int register_identify_edge_source(uintptr_t baseaddr_from, int edge_id)
+{
+	int err = 0;
+
+	fprintf(stderr, "Edge source activation %d, edge %d\n", baseaddr_from, edge_id);
+
+	return err;
+}
+
+int register_identify_edge_target(uintptr_t baseaddr_to, int edge_id)
+{
+	fprintf(stderr, "Edge target activation %d, edge %d\n", baseaddr_to, edge_id);
+	return 0;
+}
+
+

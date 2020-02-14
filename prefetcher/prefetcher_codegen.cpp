@@ -323,19 +323,21 @@ public:
 			}
 
 			// Emit Target
-//			if (auto *func =
-//					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeTarget)) {
-//				llvm::SmallVector<llvm::Value *, 2> args;
-//				args.push_back(gdi.target);
-//
-//				args.push_back(llvm::ConstantInt::get(
-//						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
-//
-//				auto *insertPt = insertPts[gdi.target];
-//				auto *call =
-//						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-//								insertPt->getNextNode());
-//			}
+			if (auto *func =
+					Mod->getFunction(PrefetcherRuntime::RegisterIdentifyEdgeTarget)) {
+				llvm::SmallVector<llvm::Value *, 2> args;
+				args.push_back(gdi.target);
+
+				args.push_back(llvm::ConstantInt::get(
+						llvm::IntegerType::get(Mod->getContext(), 32), edge_id_counter));
+
+				auto *insertPt = insertPts[gdi.target];
+				auto *call =
+						llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+								gdi.funcTarget->getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+			}
+
+			edge_id_counter++;
 		}
 	}
 
