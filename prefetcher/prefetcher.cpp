@@ -23,6 +23,10 @@
 #include "prefetcher.hpp"
 #include "util.hpp"
 
+// Register Pass
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "llvm/IR/LegacyPassManager.h"
+
 namespace {
 
 // TODO: Extract information from new
@@ -187,7 +191,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	errs() << "PrefetcherPass: " << F.getName() << "\n";
 
 	Result->allocs.clear();
-	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI();
+	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
 
 	identifyMalloc(F, Result->allocs);
 	//	identifyNew(F, Result->allocs);
@@ -220,3 +224,5 @@ char PrefetcherPass::ID = 0;
 
 static llvm::RegisterPass<PrefetcherPass> X("prefetcher", "Prefetcher Pass",
 		false, false);
+
+
