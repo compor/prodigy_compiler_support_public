@@ -245,7 +245,12 @@ void identifyGEPDependence(Function &F,
 			else if (I->getOpcode() == llvm::Instruction::Call){
 				std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> uses;
 				if (getCallGEPUses(*I, uses)) {
-					funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction());
+					if (funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction())) {
+						// Create slimmed down copy of the function that only calculates addr
+						// 1) Remove load that uses GEP result
+						// 2) Change return type of function to ptr
+						// 3) (Optional) Remove any instructions that are not necessary for GEP
+					}
 				}
 			}
 		}
