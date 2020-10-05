@@ -209,6 +209,7 @@ public:
 
 			emittedNodes.insert(AI.allocInst);
 			insertPts[AI.allocInst] = call;
+			llvm::errs() << "ALLOC INSTR: "<< *(AI.allocInst) << "\n";
 		}
 	}
 
@@ -252,12 +253,12 @@ public:
 
 				auto *insertPt = insertPts[gdi.target];
 
-				llvm::errs() << "Emitting!\n";
+				llvm::errs() << "emitRegisterTravEdge!\n";
 
 				llvm::errs() << *(gdi.source) << "\n";
 				llvm::errs() << *(gdi.target) << "\n";
 
-				llvm::errs() << "Done Emitting!\n";
+				llvm::errs() << "Done emitRegisterTravEdge!\n";
 
 
 
@@ -282,12 +283,12 @@ public:
 			args.push_back(llvm::ConstantInt::get(
 					llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
 
-			llvm::errs() << "Emitting!\n";
+			llvm::errs() << "emitRegisterTravEdge2!\n";
 
 			llvm::errs() << *(gdi.source) << "\n";
 			llvm::errs() << *(gdi.target) << "\n";
 
-			llvm::errs() << "Done Emitting!\n";
+			llvm::errs() << "Done emitRegisterTravEdge2!\n";
 
 
 
@@ -368,6 +369,8 @@ public:
 						args.push_back(llvm::ConstantInt::get(
 								llvm::IntegerType::get(Mod->getContext(), 32), NeverSquash));
 
+						llvm::errs() << "INSERT PT INSTR: "<< *(gdi.source) << "\n";
+						llvm::errs() << "INSERT PT: "<< *(insertPts[gdi.source]) << "\n";
 						auto *insertPt = insertPts[gdi.source];
 						auto *call =
 								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
@@ -411,10 +414,24 @@ public:
 						args.push_back(llvm::ConstantInt::get(
 								llvm::IntegerType::get(Mod->getContext(), 32), NeverSquash));
 
-						auto *insertPt = CurFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
-						auto *call =
+						if (llvm::dyn_cast<llvm::Argument>(gdi.source)) {
+							auto *insertPt = CurFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
+
+							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
+
+							auto *call =
 								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
 										insertPt->getNextNode());
+						}
+						else {
+							auto *insertPt = llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
+
+							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
+
+							auto *call =
+								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+										insertPt->getNextNode());
+						}
 
 						TriggerEdgeCount++;
 						//          emitSimUserPFSetParam(*(call->getNextNode()));
@@ -570,29 +587,31 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 			totalNodesNum++;
 		}
 
-		pfcg.emitRegisterIdentifyEdge(pfa->geps);
-//		pfcg.emitRegisterTrigEdge(pfa->geps);
+//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
+		pfcg.emitRegisterTrigEdge(pfa->geps);
 
 		for (GEPDepInfo & gdi : pfa->geps) {
 			if(pfcg.emittedTravEdges.count(gdi) == 0) {
-				// Check if both source and target are arguments (otherwise if not, then they are defined in the same function)
+				// Check if both source and target are arguments (otherwise if not, then they are defined in the same function,
+				// and should have been caught by previous call to emitRegisterTravEdge)
 				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
 					// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
 					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
 				}
 				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					assert(false);
+					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
 				}
 				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					assert(false);
+					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
 				}
 				else {
-					assert(false);
+					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
+//					assert(false);
 				}
 			}
 		}
 
-//		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
+		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
 
 		if (auto *mainFn = CurMod.getFunction("main")) {
 			llvm::BasicBlock &bb = mainFn->getEntryBlock();

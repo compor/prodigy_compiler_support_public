@@ -97,6 +97,70 @@ bool inArray(Instruction *I, std::vector<Instruction *> vec) {
 	return false;
 }
 
+bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use) {
+	bool ret = false;
+
+	for (auto &u : I.uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == llvm::Instruction::Ret) {
+			use = user;
+			return true;
+		}
+
+		ret |= recurseUsesForGEP(*user,use);
+	}
+
+	return ret;
+}
+
+bool funcUsesGEP(llvm::Function *F)
+{
+	bool ret = false;
+
+	for (auto &BB : *F) {
+		for (auto &I : BB) {
+			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
+				llvm::Instruction* use;
+				if (recurseUsesForGEP(I,use)) {
+					llvm::errs() << "Function " << F->getName().str().c_str() << " has GEP: " << I <<
+							" that is used in return call: " << *use;
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
+bool getCallGEPUses(llvm::Instruction &I,
+		std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> &uses, llvm::Instruction *func = nullptr) {
+	bool ret = false;
+
+	for (auto &u : I.uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == Instruction::GetElementPtr) {
+			llvm::errs() << "GEP:" << *user << "\nUses:" << *func << "\n";
+		}
+
+		if (user->getOpcode() == Instruction::GetElementPtr) {
+			ret = true;
+			uses.push_back({user,func});
+			return true;
+		}
+
+		if (func == nullptr) {
+			ret |= getCallGEPUses(*user, uses, &I);
+		}
+		else {
+			ret |= getCallGEPUses(*user, uses, func);
+		}
+	}
+
+	return ret;
+}
+
 bool recurseUsesSilent(llvm::Instruction &I,
 		std::vector<llvm::Instruction *> &uses) {
 	bool ret = false;
@@ -107,6 +171,7 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		if (user->getOpcode() == Instruction::GetElementPtr) {
 			ret = true;
 			uses.push_back(user);
+			return true;
 		}
 
 		ret |= recurseUsesSilent(*user, uses);
@@ -128,14 +193,18 @@ void identifyGEPDependence(Function &F,
 				insns.push_back(&I);
 				// errs() << "ins:" << I << "\n";
 			}
-
-			if (I.getOpcode() == Instruction::Load) {
-				loads.push_back(&I);
+			else if (I.getOpcode() == Instruction::Call) {
+				insns.push_back(&I);
 			}
 
 			if (I.getOpcode() == Instruction::Load) {
 				loads.push_back(&I);
 			}
+
+			if (I.getOpcode() == Instruction::Load) {
+				loads.push_back(&I);
+			}
+
 		}
 	}
 
@@ -173,6 +242,12 @@ void identifyGEPDependence(Function &F,
 					}
 				}
 			}
+			else if (I->getOpcode() == llvm::Instruction::Call){
+				std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> uses;
+				if (getCallGEPUses(*I, uses)) {
+					funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction());
+				}
+			}
 		}
 	}
 }
@@ -194,7 +269,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
 
 	identifyMalloc(F, Result->allocs);
-	//	identifyNew(F, Result->allocs);
+	identifyNew(F, Result->allocs);
 	identifyGEPDependence(F, Result->geps);
 
 	return false;
