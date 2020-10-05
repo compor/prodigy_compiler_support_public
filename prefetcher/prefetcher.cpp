@@ -258,66 +258,68 @@ void identifyGEPDependence(Function &F,
 						// 2) Change return type of function to ptr
 						// 3) (Optional) Remove any instructions that are not necessary for GEP
 						{
-							llvm::errs() << "BOOBOO 1\n";
-							// Copy function signature from old function
+							// Copy function signature from old function (arguments only)
 							Function * F_old = dyn_cast<CallInst>(I)->getCalledFunction();
 							FunctionType *FT = F_old->getFunctionType();
 							SmallVector<Type *, 8> ArgTypes;
 							for (unsigned i = 0; i < FT->getNumParams(); ++i) {
 								ArgTypes.push_back(FT->getParamType(i));
 							}
-							llvm::errs() << "BOOBOO 2\n";
 
-							// Change the return type
+							// Create new function type - change the return type, use existing args
 							llvm::FunctionType * FT1 = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(F_old->getParent()->getContext()),FT);
 
-							llvm::errs() << "BOOBOO 3\n";
-
 							// Create new function
-							llvm::Function * NewF = Function::Create(FT1, F_old->getLinkage(), F_old->getName().str() + "_clone");
+							llvm::Function * NewF = Function::Create(FT1, llvm::Function::LinkageTypes::InternalLinkage, F_old->getName().str() + "_clone");
 
-							llvm::errs() << "BOOBOO 4\n";
+							F.getParent()->getFunctionList().push_back(NewF);
 
-							// I don't really know what VMap is for, just copied it from an example I found in LLVM source
+
+							// Map the arguments from the old function to the new
 							ValueToValueMapTy VMap;
-							VMap[&*F_old->arg_begin()] = &*NewF->arg_begin();
 
-							llvm::errs() << "BOOBOO 5\n";
+							auto NewArgI = NewF->arg_begin();
+							for (auto ArgI = F_old->arg_begin(), ArgE = F_old->arg_end(); ArgI != ArgE; ++ArgI, ++NewArgI) {
+								VMap[&*ArgI] = &*NewArgI;
+							}
+
+
+							//							VMap[&*F_old->arg_begin()] = &*NewF->arg_begin();
 
 							// Again, this is just copied from an example I found in LLVM source. Needed for CloneFunctionInto
 							SmallVector<ReturnInst*, 4> Returns;
 
 							// Clone function
 							CloneFunctionInto(NewF, F_old, VMap, /*ModuleLevelChanges=*/false, Returns);
-
-							llvm::errs() << "BOOBOO 6\n";
-
-							// Find all ret calls in new function
-							std::vector<llvm::Instruction*> returns;
-							for (llvm::BasicBlock & BB_new : *NewF) {
-								for (llvm::Instruction & I_new : BB_new) {
-									if (I_new.getOpcode() == llvm::Instruction::Ret) {
-										returns.push_back(&I_new);
-									}
-								}
-							}
-
-							llvm::errs() << "BOOBOO 7\n";
-
-							// Find the GEP that the return depends on
-							funcUsesGEP(NewF, GEP);
-
-							llvm::errs() << "BOOBOO 8\n";
-							// delete the returns (tbh we should delete everything after that GEP..)
-							for (llvm::Instruction* I_del: returns) {
-								I_del->eraseFromParent();
-							}
-
-							llvm::errs() << "BOOBOO 9\n";
-
-							// Create new return instruction in new function
-							auto *ret = llvm::ReturnInst::Create(NewF->getParent()->getContext(),GEP, GEP->getNextNode());
-							llvm::errs() << "BOOBOO 10\n";
+							//
+							//							llvm::errs() << "BOOBOO 6\n";
+							//
+							//							// Find all ret calls in new function
+							//							std::vector<llvm::Instruction*> returns;
+							//							for (llvm::BasicBlock & BB_new : *NewF) {
+							//								for (llvm::Instruction & I_new : BB_new) {
+							//									if (I_new.getOpcode() == llvm::Instruction::Ret) {
+							//										returns.push_back(&I_new);
+							//									}
+							//								}
+							//							}
+							//
+							//							llvm::errs() << "BOOBOO 7\n";
+							//
+							//							// Find the GEP that the return depends on
+							//							funcUsesGEP(NewF, GEP);
+							//
+							//							llvm::errs() << "BOOBOO 8\n";
+							//							// delete the returns (tbh we should delete everything after that GEP..)
+							//							for (llvm::Instruction* I_del: returns) {
+							//								I_del->eraseFromParent();
+							//							}
+							//
+							//							llvm::errs() << "BOOBOO 9\n";
+							//
+							//							// Create new return instruction in new function
+							//							auto *ret = llvm::ReturnInst::Create(NewF->getParent()->getContext(),GEP, GEP->getNextNode());
+							//							llvm::errs() << "BOOBOO 10\n";
 						}
 					}
 				}
