@@ -269,6 +269,20 @@ void identifyGEPDependence(Function &F,
 				if (getCallGEPUses(*I, uses)) {
 					//					llvm::Instruction * GEP;
 					std::set<llvm::Instruction*> GEPs;
+
+					Function* fp = dyn_cast<CallInst>(I)->getCalledFunction();
+					if (fp==NULL) {
+//						llvm::errs() << "OMG1 " << *I << "\n";
+						Value* v=dyn_cast<CallInst>(I)->getCalledValue();
+						Value* sv = v->stripPointerCasts();
+
+//						llvm::errs() << "OMG" << v->getName().str().c_str() << "\n";
+						if (llvm::dyn_cast<Function>(sv)) {
+							errs()<< "Indirect function: \n";
+						}
+						continue;
+					}
+
 					if (funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction(), GEPs)) {
 
 						llvm::errs() << "Edges spanning functions:\n";

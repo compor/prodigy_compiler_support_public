@@ -83,7 +83,7 @@ using namespace llvm;
 template <typename T> void printVector(std::string inStr, T begin, T end) {
 	errs() << inStr << ": < ";
 	for (auto it = begin; it != end; ++it) {
-		errs() << **it << " ";
+		errs() << **it << "\n";
 	}
 	errs() << ">\n";
 }
