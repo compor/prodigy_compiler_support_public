@@ -174,19 +174,21 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		std::vector<llvm::Instruction *> &uses, int stack_count = 0) {
 	bool ret = false;
 
+//	llvm::errs() << I << "\n";
+
 	for (auto &u : I.uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
 		if (user->getOpcode() == Instruction::GetElementPtr) {
 			ret = true;
 			uses.push_back(user);
-			return true;
+//			return true;
 		}
 
-//		if (stack_count < 10) {
-			llvm::errs() << "Stack Count: " << stack_count << "\n";
+		if (stack_count < 512) {
+//			llvm::errs() << "Stack Count: " << stack_count << "\n";
 			ret |= recurseUsesSilent(*user, uses, ++stack_count);
-//		}
+		}
 	}
 
 	return ret;
