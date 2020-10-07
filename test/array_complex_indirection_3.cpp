@@ -39,7 +39,7 @@ private:
   
 public:
   Graph() {
-    nodes = new std::vector<ARR*>;
+    //nodes = new std::vector<ARR*>;
     // register_profile_node(1)
   }
   
