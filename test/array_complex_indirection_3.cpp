@@ -13,6 +13,7 @@ public:
   
   ARR(int size) {
     val = std::vector<uint32_t>(size);
+    // register_profile_node(0)
   }
 
   void set(int index) {
@@ -20,6 +21,8 @@ public:
   }
   
   int get(int index) {
+    // %1 = GEP val
+    // register_profile_node(0)
     return val.at(index);
   }
 
@@ -36,7 +39,8 @@ private:
   
 public:
   Graph() {
-    //nodes = new std::vector<ARR*>;
+    nodes = new std::vector<ARR*>;
+    // register_profile_node(1)
   }
   
   void assign_node(ARR* a) {
@@ -45,6 +49,13 @@ public:
 
   uint32_t getNodeIVal(uint32_t node_id, uint32_t arr_id)
   {
+    //%1 = GEP nodes
+    //%2 = get_copy(arr_id)
+    //%3 = GEP %2
+    // register_edge(nodes, %2)
+
+    // Profiling
+    //register_profile_node(0)
     return nodes.at(node_id)->get(arr_id);
   }
 };
@@ -63,11 +74,11 @@ void initialize_arr(ARR & arr)
   }
 }
 
-int access_3(Graph & g, uint32_t * b, uint32_t * c, uint32_t * d, int size, uint32_t node_id, uint32_t arr_id)
+int access_3(Graph & g, uint32_t * b, uint32_t * c, uint32_t * d, int size, uint32_t node_id)
 {
     // indirection of the type A[B[i]]
     for(int i = 0; i < 10; ++i) {
-      *(d+i) = c[b[g.getNodeIVal(node_id,arr_id)]] + 1;
+      *(d+i) = c[b[g.getNodeIVal(node_id,i)]] + 1;
     }
     return 0;
 }
@@ -83,6 +94,11 @@ int main(/*int argc, char * argv[]*/)
 
     ARR arr = ARR(10);
     Graph g = Graph();
+
+    //register_node(arr.val);
+    //register_node(g.arr);
+    //register_edge(arr.val, g.arr);
+    
     g.assign_node(&arr);
     
     // initialize data structures
@@ -91,7 +107,7 @@ int main(/*int argc, char * argv[]*/)
     initialize(c,10);
     initialize_arr(arr);
 
-    int ret = access_3(g,b,c,d,size2,0,0);
+    int ret = access_3(g,b,c,d,size2,0);
     
     return ret;
 }
