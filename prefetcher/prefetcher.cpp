@@ -117,7 +117,9 @@ bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use) {
 	return ret;
 }
 
-bool funcUsesGEP(llvm::Function *F, llvm::Instruction * GEP)
+// First argument is a function on which a GEP instruction depends.
+// This function iterates over the instructions in this function, and searches for GEP instructions on which the return of that function depends
+bool funcUsesGEP(llvm::Function *F, std::set<llvm::Instruction*> & GEPs)
 {
 	bool ret = false;
 
@@ -126,11 +128,14 @@ bool funcUsesGEP(llvm::Function *F, llvm::Instruction * GEP)
 			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
 				llvm::Instruction* use;
 				if (recurseUsesForGEP(I,use)) {
-					llvm::errs() << "Function " << F->getName().str().c_str() << " has GEP: " << I <<
-							" that is used in return call: " << *use;
-					GEP = &I;
+					//					llvm::errs() << "Function " << F->getName().str().c_str() << " has GEP: " << I <<
+					//							" that is used in return call: " << *use << "\n\n";
+					GEPs.insert(&I);
 					ret |= true;
 				}
+			}
+			else if (I.getOpcode() == llvm::Instruction::Call) {
+				funcUsesGEP(dyn_cast<CallInst>(&I)->getCalledFunction(),GEPs);
 			}
 		}
 	}
@@ -138,6 +143,7 @@ bool funcUsesGEP(llvm::Function *F, llvm::Instruction * GEP)
 	return ret;
 }
 
+// This function checks if a GEP instruction is dependent on a call instruction
 bool getCallGEPUses(llvm::Instruction &I,
 		std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> &uses, llvm::Instruction *func = nullptr) {
 	bool ret = false;
@@ -146,15 +152,13 @@ bool getCallGEPUses(llvm::Instruction &I,
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
 		if (user->getOpcode() == Instruction::GetElementPtr) {
-			llvm::errs() << "GEP:" << *user << "\nUses:" << *func << "\n";
-		}
-
-		if (user->getOpcode() == Instruction::GetElementPtr) {
+			//			llvm::errs() << "GEP:" << *user << "\nUses:" << *func << "\n";
 			ret = true;
 			uses.push_back({user,func});
 			return true;
 		}
 
+		// Recurse over instruction dependence chain
 		if (func == nullptr) {
 			ret |= getCallGEPUses(*user, uses, &I);
 		}
@@ -206,7 +210,7 @@ void identifyGEPDependence(Function &F,
 				loads.push_back(&I);
 			}
 
-			if (I.getOpcode() == Instruction::Load) {
+			if (I.getOpcode() == Instruction::Load) { // TODO: Is there a reason for pushing back the load twice?
 				loads.push_back(&I);
 			}
 
@@ -250,77 +254,100 @@ void identifyGEPDependence(Function &F,
 			else if (I->getOpcode() == llvm::Instruction::Call){
 				std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> uses;
 				if (getCallGEPUses(*I, uses)) {
-					llvm::Instruction * GEP;
-					if (funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction(), GEP)) {
+					//					llvm::Instruction * GEP;
+					std::set<llvm::Instruction*> GEPs;
+					if (funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction(), GEPs)) {
+
+						llvm::errs() << "Edges spanning functions:\n";
+
+						std::set<std::pair<llvm::Instruction*,llvm::Instruction*>> edges;
+
+						for (auto instr : uses) {
+							if (usedInLoad(instr.first)) {
+								for (auto I2 : GEPs) {
+									edges.insert({instr.first, I2});
+								}
+							}
+						}
+
+						for (auto pair : edges) {
+							llvm::errs() << "source: " << *(pair.first) << "\n";
+							llvm::errs() << "target: " << *(pair.second) << "\n\n";
+							GEPDepInfo g;
+							g.source = pair.first->getOperand(0);
+							g.funcSource = pair.first->getParent()->getParent(); // TODO: funcSource and funcTarget probably not needed here
+							g.target = pair.second->getOperand(0);
+							g.funcTarget = pair.second->getParent()->getParent();
+						}
 
 						// Create slimmed down copy of the function that only calculates addr
 						// 1) Remove load that uses GEP result
 						// 2) Change return type of function to ptr
 						// 3) (Optional) Remove any instructions that are not necessary for GEP
-						{
-							// Copy function signature from old function (arguments only)
-							Function * F_old = dyn_cast<CallInst>(I)->getCalledFunction();
-							FunctionType *FT = F_old->getFunctionType();
-							SmallVector<Type *, 8> ArgTypes;
-							for (unsigned i = 0; i < FT->getNumParams(); ++i) {
-								ArgTypes.push_back(FT->getParamType(i));
-							}
-
-							// Create new function type - change the return type, use existing args
-							llvm::FunctionType * FT1 = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(F_old->getParent()->getContext()),FT);
-
-							// Create new function
-							llvm::Function * NewF = Function::Create(FT1, llvm::Function::LinkageTypes::InternalLinkage, F_old->getName().str() + "_clone");
-
-							F.getParent()->getFunctionList().push_back(NewF);
-
-
-							// Map the arguments from the old function to the new
-							ValueToValueMapTy VMap;
-
-							auto NewArgI = NewF->arg_begin();
-							for (auto ArgI = F_old->arg_begin(), ArgE = F_old->arg_end(); ArgI != ArgE; ++ArgI, ++NewArgI) {
-								VMap[&*ArgI] = &*NewArgI;
-							}
-
-
-							//							VMap[&*F_old->arg_begin()] = &*NewF->arg_begin();
-
-							// Again, this is just copied from an example I found in LLVM source. Needed for CloneFunctionInto
-							SmallVector<ReturnInst*, 4> Returns;
-
-							// Clone function
-							CloneFunctionInto(NewF, F_old, VMap, /*ModuleLevelChanges=*/false, Returns);
-							//
-							//							llvm::errs() << "BOOBOO 6\n";
-							//
-							//							// Find all ret calls in new function
-							//							std::vector<llvm::Instruction*> returns;
-							//							for (llvm::BasicBlock & BB_new : *NewF) {
-							//								for (llvm::Instruction & I_new : BB_new) {
-							//									if (I_new.getOpcode() == llvm::Instruction::Ret) {
-							//										returns.push_back(&I_new);
-							//									}
-							//								}
-							//							}
-							//
-							//							llvm::errs() << "BOOBOO 7\n";
-							//
-							//							// Find the GEP that the return depends on
-							//							funcUsesGEP(NewF, GEP);
-							//
-							//							llvm::errs() << "BOOBOO 8\n";
-							//							// delete the returns (tbh we should delete everything after that GEP..)
-							//							for (llvm::Instruction* I_del: returns) {
-							//								I_del->eraseFromParent();
-							//							}
-							//
-							//							llvm::errs() << "BOOBOO 9\n";
-							//
-							//							// Create new return instruction in new function
-							//							auto *ret = llvm::ReturnInst::Create(NewF->getParent()->getContext(),GEP, GEP->getNextNode());
-							//							llvm::errs() << "BOOBOO 10\n";
-						}
+						//						{
+						//							// Copy function signature from old function (arguments only)
+						//							Function * F_old = dyn_cast<CallInst>(I)->getCalledFunction();
+						//							FunctionType *FT = F_old->getFunctionType();
+						//							SmallVector<Type *, 8> ArgTypes;
+						//							for (unsigned i = 0; i < FT->getNumParams(); ++i) {
+						//								ArgTypes.push_back(FT->getParamType(i));
+						//							}
+						//
+						//							// Create new function type - change the return type, use existing args
+						//							llvm::FunctionType * FT1 = llvm::FunctionType::get(llvm::Type::getInt8PtrTy(F_old->getParent()->getContext()),FT);
+						//
+						//							// Create new function
+						//							llvm::Function * NewF = Function::Create(FT1, llvm::Function::LinkageTypes::InternalLinkage, F_old->getName().str() + "_clone");
+						//
+						//							F.getParent()->getFunctionList().push_back(NewF);
+						//
+						//
+						//							// Map the arguments from the old function to the new
+						//							ValueToValueMapTy VMap;
+						//
+						//							auto NewArgI = NewF->arg_begin();
+						//							for (auto ArgI = F_old->arg_begin(), ArgE = F_old->arg_end(); ArgI != ArgE; ++ArgI, ++NewArgI) {
+						//								VMap[&*ArgI] = &*NewArgI;
+						//							}
+						//
+						//
+						//							//							VMap[&*F_old->arg_begin()] = &*NewF->arg_begin();
+						//
+						//							// Again, this is just copied from an example I found in LLVM source. Needed for CloneFunctionInto
+						//							SmallVector<ReturnInst*, 4> Returns;
+						//
+						//							// Clone function
+						////							CloneFunctionInto(NewF, F_old, VMap, /*ModuleLevelChanges=*/false, Returns);
+						//							//
+						//							//							llvm::errs() << "BOOBOO 6\n";
+						//							//
+						//							//							// Find all ret calls in new function
+						//							//							std::vector<llvm::Instruction*> returns;
+						//							//							for (llvm::BasicBlock & BB_new : *NewF) {
+						//							//								for (llvm::Instruction & I_new : BB_new) {
+						//							//									if (I_new.getOpcode() == llvm::Instruction::Ret) {
+						//							//										returns.push_back(&I_new);
+						//							//									}
+						//							//								}
+						//							//							}
+						//							//
+						//							//							llvm::errs() << "BOOBOO 7\n";
+						//							//
+						//							//							// Find the GEP that the return depends on
+						//							//							funcUsesGEP(NewF, GEP);
+						//							//
+						//							//							llvm::errs() << "BOOBOO 8\n";
+						//							//							// delete the returns (tbh we should delete everything after that GEP..)
+						//							//							for (llvm::Instruction* I_del: returns) {
+						//							//								I_del->eraseFromParent();
+						//							//							}
+						//							//
+						//							//							llvm::errs() << "BOOBOO 9\n";
+						//							//
+						//							//							// Create new return instruction in new function
+						//							//							auto *ret = llvm::ReturnInst::Create(NewF->getParent()->getContext(),GEP, GEP->getNextNode());
+						//							//							llvm::errs() << "BOOBOO 10\n";
+						//						}
 					}
 				}
 			}
@@ -334,6 +361,7 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
 	AU.addRequired<TargetLibraryInfoWrapperPass>();
 	AU.addRequired<MemorySSAWrapperPass>();
 	AU.addRequired<DependenceAnalysisWrapperPass>();
+	//	AU.addRequired<CallGraphWrapperPass>(); // Need to convert PrefetcherPass to ModulePass to get this
 	AU.setPreservesAll();
 }
 
