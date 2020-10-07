@@ -270,7 +270,22 @@ void identifyGEPDependence(Function &F,
 							}
 						}
 
+						std::set<std::pair<llvm::Instruction*,llvm::Instruction*>> filtered_edges(edges);
+
 						for (auto pair : edges) {
+							for (auto pair2 : edges) {
+								if (pair != pair2) {
+									if ((pair.first)->getOperand(0) == (pair2.first)->getOperand(0) &&
+											(pair.second)->getOperand(0) == (pair2.second)->getOperand(0)) {
+										if (filtered_edges.find(pair) != filtered_edges.end()) {
+											filtered_edges.erase(pair2);
+										}
+									}
+								}
+							}
+						}
+
+						for (auto pair : filtered_edges) {
 							llvm::errs() << "source: " << *(pair.first) << "\n";
 							llvm::errs() << "target: " << *(pair.second) << "\n\n";
 							GEPDepInfo g;
@@ -278,6 +293,7 @@ void identifyGEPDependence(Function &F,
 							g.funcSource = pair.first->getParent()->getParent(); // TODO: funcSource and funcTarget probably not needed here
 							g.target = pair.second->getOperand(0);
 							g.funcTarget = pair.second->getParent()->getParent();
+//							gepInfos.push_back(g);
 						}
 
 						// Create slimmed down copy of the function that only calculates addr
