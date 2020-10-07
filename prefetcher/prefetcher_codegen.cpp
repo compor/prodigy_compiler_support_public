@@ -603,7 +603,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
 				}
 				else {
-					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
+					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
 //					assert(false);
 				}
 			}
