@@ -30,6 +30,8 @@
 // Clone Function
 #include "llvm/Transforms/Utils/Cloning.h"
 
+#define MAX_STACK_COUNT 10
+
 namespace {
 
 // TODO: Extract information from new
@@ -100,7 +102,7 @@ bool inArray(Instruction *I, std::vector<Instruction *> vec) {
 	return false;
 }
 
-bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use) {
+bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use, int stack_count = 0) {
 	bool ret = false;
 
 	for (auto &u : I.uses()) {
@@ -111,7 +113,9 @@ bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use) {
 			return true;
 		}
 
-		ret |= recurseUsesForGEP(*user,use);
+		if (stack_count < MAX_STACK_COUNT) {
+			ret |= recurseUsesForGEP(*user,use, ++stack_count);
+		}
 	}
 
 	return ret;
@@ -119,7 +123,7 @@ bool recurseUsesForGEP(llvm::Instruction &I,llvm::Instruction*&use) {
 
 // First argument is a function on which a GEP instruction depends.
 // This function iterates over the instructions in this function, and searches for GEP instructions on which the return of that function depends
-bool funcUsesGEP(llvm::Function *F, std::set<llvm::Instruction*> & GEPs)
+bool funcUsesGEP(llvm::Function *F, std::set<llvm::Instruction*> & GEPs, int stack_count = 0)
 {
 	bool ret = false;
 
@@ -135,7 +139,9 @@ bool funcUsesGEP(llvm::Function *F, std::set<llvm::Instruction*> & GEPs)
 				}
 			}
 			else if (I.getOpcode() == llvm::Instruction::Call) {
-				funcUsesGEP(dyn_cast<CallInst>(&I)->getCalledFunction(),GEPs);
+				if (stack_count < MAX_STACK_COUNT) {
+					funcUsesGEP(dyn_cast<CallInst>(&I)->getCalledFunction(),GEPs, ++stack_count);
+				}
 			}
 		}
 	}
@@ -145,7 +151,7 @@ bool funcUsesGEP(llvm::Function *F, std::set<llvm::Instruction*> & GEPs)
 
 // This function checks if a GEP instruction is dependent on a call instruction
 bool getCallGEPUses(llvm::Instruction &I,
-		std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> &uses, llvm::Instruction *func = nullptr) {
+		std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> &uses, llvm::Instruction *func = nullptr, int stack_count = 0) {
 	bool ret = false;
 
 	for (auto &u : I.uses()) {
@@ -159,11 +165,13 @@ bool getCallGEPUses(llvm::Instruction &I,
 		}
 
 		// Recurse over instruction dependence chain
-		if (func == nullptr) {
-			ret |= getCallGEPUses(*user, uses, &I);
-		}
-		else {
-			ret |= getCallGEPUses(*user, uses, func);
+		if (stack_count < MAX_STACK_COUNT) {
+			if (func == nullptr) {
+				ret |= getCallGEPUses(*user, uses, &I, ++stack_count);
+			}
+			else {
+				ret |= getCallGEPUses(*user, uses, func, ++stack_count);
+			}
 		}
 	}
 
@@ -174,7 +182,7 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		std::vector<llvm::Instruction *> &uses, int stack_count = 0) {
 	bool ret = false;
 
-//	llvm::errs() << I << "\n";
+	//	llvm::errs() << I << "\n";
 
 	for (auto &u : I.uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
@@ -182,11 +190,11 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		if (user->getOpcode() == Instruction::GetElementPtr) {
 			ret = true;
 			uses.push_back(user);
-//			return true;
+			//			return true;
 		}
 
-		if (stack_count < 512) {
-//			llvm::errs() << "Stack Count: " << stack_count << "\n";
+		if (stack_count < MAX_STACK_COUNT) {
+			//			llvm::errs() << "Stack Count: " << stack_count << "\n";
 			ret |= recurseUsesSilent(*user, uses, ++stack_count);
 		}
 	}
@@ -298,7 +306,7 @@ void identifyGEPDependence(Function &F,
 							g.funcSource = pair.first->getParent()->getParent(); // TODO: funcSource and funcTarget probably not needed here
 							g.target = pair.second->getOperand(0);
 							g.funcTarget = pair.second->getParent()->getParent();
-//							gepInfos.push_back(g);
+							//							gepInfos.push_back(g);
 						}
 
 						// Create slimmed down copy of the function that only calculates addr
