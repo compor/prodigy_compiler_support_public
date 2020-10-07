@@ -260,8 +260,6 @@ public:
 
 				llvm::errs() << "Done emitRegisterTravEdge!\n";
 
-
-
 				auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 						args, "", insertPt->getNextNode());
 

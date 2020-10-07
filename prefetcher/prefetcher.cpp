@@ -171,7 +171,7 @@ bool getCallGEPUses(llvm::Instruction &I,
 }
 
 bool recurseUsesSilent(llvm::Instruction &I,
-		std::vector<llvm::Instruction *> &uses) {
+		std::vector<llvm::Instruction *> &uses, int stack_count = 0) {
 	bool ret = false;
 
 	for (auto &u : I.uses()) {
@@ -183,7 +183,10 @@ bool recurseUsesSilent(llvm::Instruction &I,
 			return true;
 		}
 
-		ret |= recurseUsesSilent(*user, uses);
+//		if (stack_count < 10) {
+			llvm::errs() << "Stack Count: " << stack_count << "\n";
+			ret |= recurseUsesSilent(*user, uses, ++stack_count);
+//		}
 	}
 
 	return ret;

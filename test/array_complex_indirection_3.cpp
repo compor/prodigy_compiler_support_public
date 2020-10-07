@@ -7,24 +7,24 @@
 class ARR
 {
 private:
-  std::vector<uint32_t> *val;
+  std::vector<uint32_t> val;
   
 public:
   
   ARR(int size) {
-    val = new std::vector<uint32_t>(size);
+    val = std::vector<uint32_t>(size);
   }
 
   void set(int index) {
-    val->at(index) = index;
+    val.at(index) = index;
   }
   
   int get(int index) {
-    return val->at(index);
+    return val.at(index);
   }
 
   int size() {
-    return val->size();
+    return val.size();
   }
 };
 
@@ -32,20 +32,20 @@ public:
 class Graph
 {
 private:
-  std::vector<ARR*> * nodes;
+  std::vector<ARR*> nodes;
   
 public:
   Graph() {
-    nodes = new std::vector<ARR*>;
+    //nodes = new std::vector<ARR*>;
   }
   
   void assign_node(ARR* a) {
-    nodes->push_back(a);
+    nodes.push_back(a);
   }
 
   uint32_t getNodeIVal(uint32_t node_id, uint32_t arr_id)
   {
-    return nodes->at(node_id)->get(arr_id);
+    return nodes.at(node_id)->get(arr_id);
   }
 };
 
