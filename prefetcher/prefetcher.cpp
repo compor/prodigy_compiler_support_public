@@ -299,8 +299,8 @@ void identifyGEPDependence(Function &F,
 						}
 
 						for (auto pair : filtered_edges) {
-							llvm::errs() << "source: " << *(pair.first) << "\n";
-							llvm::errs() << "target: " << *(pair.second) << "\n\n";
+							llvm::errs() << "source: " << *(pair.first->getOperand(0)) << "\n";
+							llvm::errs() << "target: " << *(pair.second->getOperand(0)) << "\n\n";
 							GEPDepInfo g;
 							g.source = pair.first->getOperand(0);
 							g.funcSource = pair.first->getParent()->getParent(); // TODO: funcSource and funcTarget probably not needed here
