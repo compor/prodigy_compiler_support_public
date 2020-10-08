@@ -30,6 +30,19 @@
 // Clone Function
 #include "llvm/Transforms/Utils/Cloning.h"
 
+#include "llvm/Support/CommandLine.h"
+// using llvm::cl::opt
+// using llvm::cl::list
+// using llvm::cl::desc
+// using llvm::cl::Hidden
+
+#include <string>
+#include <fstream>
+
+llvm::cl::opt<std::string> FunctionWhiteListFile(
+    "func-wl-file", llvm::cl::Hidden,
+    llvm::cl::desc("function whitelist file"));
+
 #define MAX_STACK_COUNT 10
 
 namespace {
@@ -466,6 +479,32 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 	errs() << "PrefetcherPass: " << F.getName() << "\n";
+
+  auto not_in = [](const auto &C, const auto &E) {
+        return C.end() == std::find(std::begin(C), std::end(C), E);
+  };
+
+  llvm::SmallVector<std::string, 32> FunctionWhiteList;
+
+  if (FunctionWhiteListFile.getPosition()) {
+    std::ifstream wlFile{FunctionWhiteListFile};
+
+    std::string funcName;
+    while (wlFile >> funcName) {
+      FunctionWhiteList.push_back(funcName);
+    }
+  }
+
+  if (F.isDeclaration()) {
+    return false;
+  }
+
+  if (FunctionWhiteListFile.getPosition() &&
+      not_in(FunctionWhiteList, std::string{F.getName()})) {
+        LLVM_DEBUG(llvm::dbgs() << "skipping func: " << F.getName()
+                                << " reason: not in whitelist\n";);
+    return false;
+  }
 
 	Result->allocs.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
