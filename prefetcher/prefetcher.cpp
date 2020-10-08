@@ -224,24 +224,33 @@ bool getCallGEPUses(llvm::Instruction &I,
 }
 
 bool recurseUsesSilent(llvm::Instruction &I,
-		std::vector<llvm::Instruction *> &uses, int stack_count = 0) {
+		std::vector<llvm::Instruction *> &uses, llvm::SmallPtrSetImpl<llvm::Instruction *> &visited, int stack_count = 0) {
 	bool ret = false;
 
-	//	llvm::errs() << I << "\n";
+  //llvm::errs() << I << "\n";
+  if(visited.count(&I)) {
+    return false;
+  }
+  visited.insert(&I);
 
 	for (auto &u : I.uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
 		if (user->getOpcode() == Instruction::GetElementPtr) {
 			ret = true;
-			uses.push_back(user);
+
+      auto found = std::find(uses.begin(), uses.end(), u);
+
+      if(found == uses.end()) {
+        uses.push_back(user);
+      }
 			//			return true;
 		}
 
-		if (stack_count < MAX_STACK_COUNT) {
+		//if (stack_count < MAX_STACK_COUNT) {
 			//			llvm::errs() << "Stack Count: " << stack_count << "\n";
-			ret |= recurseUsesSilent(*user, uses, ++stack_count);
-		}
+			ret |= recurseUsesSilent(*user, uses, visited, ++stack_count);
+		//}
 	}
 
 	return ret;
@@ -288,8 +297,9 @@ void identifyGEPDependence(Function &F,
 				// and does not detect stores of type A[B[i]]
 
 				std::vector<llvm::Instruction *> uses;
+				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
 
-				if (usedInLoad(I) && recurseUsesSilent(*I, uses)) {
+				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
 					for (auto U : uses) {
 						if (usedInLoad(U)) {
 							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
