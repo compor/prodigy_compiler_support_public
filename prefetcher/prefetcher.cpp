@@ -34,23 +34,19 @@
 
 namespace {
 
-bool getSizeCalc(llvm::Value &I, std::vector<llvm::Value *> &vals, int stack_count = 0) {
+bool getSizeCalc(llvm::Value &I, std::set<llvm::Value *> &vals, int stack_count = 0) {
 	bool ret = false;
-
-	llvm::errs() << "getSizeCalc " << stack_count << "\n";
 
 	if (llvm::Instruction* Instr = dyn_cast<llvm::Instruction>(&I)) {
 
 		for (int i = 0; i < Instr->getNumOperands(); ++i) {
 			if (auto *user = llvm::dyn_cast<llvm::Instruction>(Instr->getOperand(i))) {
 
-				llvm::errs() << *user << "\n";
-
 				if (user->getOpcode() == Instruction::Call) {
 					if (dyn_cast<llvm::CallInst>(user)->getCalledFunction()->getName().str() == std::string("llvm.umul.with.overflow.i64")) {
-						llvm::errs() << "\nFound " << *user << "\n";
+//						llvm::errs() << "\nFound " << *user << "\n";
 						ret = true;
-						vals.push_back(user);
+						vals.insert(user);
 						return true;
 					}
 				}
@@ -83,14 +79,20 @@ void identifyNewA(llvm::Function &F,
 					errs() << "Argument0:" << *(CS.getArgOperand(0)); // Total Size
 
 					// Get element size
-					std::vector<llvm::Value*> vals;
+					std::set<llvm::Value*> vals;
 					getSizeCalc(*(CS.getArgOperand(0)),vals);
 					if (vals.size() > 0) {
 						llvm::errs() << "\ngetSizeCalc: \n";
 						for (auto v : vals) {
 							llvm::errs() << *v << "\n";
 							CallSite size(v);
-							llvm::errs() << *(size.getArgument(1));
+							llvm::errs() << *(size.getArgOperand(1));
+
+							myAllocCallInfo allocInfo;
+							allocInfo.allocInst = &I;
+							allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),CS.getArgOperand(0));
+							allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),size.getArgOperand(1));
+							allocInfos.push_back(allocInfo);
 						}
 						llvm::errs() << "\n";
 					}
