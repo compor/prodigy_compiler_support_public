@@ -34,8 +34,40 @@
 
 namespace {
 
+bool getSizeCalc(llvm::Value &I, std::vector<llvm::Value *> &vals, int stack_count = 0) {
+	bool ret = false;
+
+	llvm::errs() << "getSizeCalc " << stack_count << "\n";
+
+	if (llvm::Instruction* Instr = dyn_cast<llvm::Instruction>(&I)) {
+
+		for (int i = 0; i < Instr->getNumOperands(); ++i) {
+			if (auto *user = llvm::dyn_cast<llvm::Instruction>(Instr->getOperand(i))) {
+
+				llvm::errs() << *user << "\n";
+
+				if (user->getOpcode() == Instruction::Call) {
+					if (dyn_cast<llvm::CallInst>(user)->getCalledFunction()->getName().str() == std::string("llvm.umul.with.overflow.i64")) {
+						llvm::errs() << "\nFound " << *user << "\n";
+						ret = true;
+						vals.push_back(user);
+						return true;
+					}
+				}
+
+				if (stack_count < 200) {
+					//			llvm::errs() << "Stack Count: " << stack_count << "\n";
+					ret |= getSizeCalc(*user, vals, ++stack_count);
+				}
+			}
+		}
+	}
+
+	return ret;
+}
+
 // TODO: Extract information from new
-void identifyNew(llvm::Function &F,
+void identifyNewA(llvm::Function &F,
 		llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
 	for (llvm::BasicBlock &BB : F) {
 		for (llvm::Instruction &I : BB) {
@@ -47,8 +79,21 @@ void identifyNew(llvm::Function &F,
 
 			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
 				if (f->getName().equals("_Znam")) {
-					errs() << "New Array Alloc: " << I << "\n";
-					errs() << "Argument0:" << *(CS.getArgOperand(0));
+					errs() << "New Array Alloc: " << I << "\n"; // Pointer
+					errs() << "Argument0:" << *(CS.getArgOperand(0)); // Total Size
+
+					// Get element size
+					std::vector<llvm::Value*> vals;
+					getSizeCalc(*(CS.getArgOperand(0)),vals);
+					if (vals.size() > 0) {
+						llvm::errs() << "\ngetSizeCalc: \n";
+						for (auto v : vals) {
+							llvm::errs() << *v << "\n";
+							CallSite size(v);
+							llvm::errs() << *(size.getArgument(1));
+						}
+						llvm::errs() << "\n";
+					}
 				}
 			}
 		}
@@ -272,11 +317,11 @@ void identifyGEPDependence(Function &F,
 
 					Function* fp = dyn_cast<CallInst>(I)->getCalledFunction();
 					if (fp==NULL) {
-//						llvm::errs() << "OMG1 " << *I << "\n";
+						//						llvm::errs() << "OMG1 " << *I << "\n";
 						Value* v=dyn_cast<CallInst>(I)->getCalledValue();
 						Value* sv = v->stripPointerCasts();
 
-//						llvm::errs() << "OMG" << v->getName().str().c_str() << "\n";
+						//						llvm::errs() << "OMG" << v->getName().str().c_str() << "\n";
 						if (llvm::dyn_cast<Function>(sv)) {
 							errs()<< "Indirect function: \n";
 						}
@@ -416,7 +461,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
 
 	identifyMalloc(F, Result->allocs);
-	identifyNew(F, Result->allocs);
+	identifyNewA(F, Result->allocs);
 	identifyGEPDependence(F, Result->geps);
 
 	return false;
