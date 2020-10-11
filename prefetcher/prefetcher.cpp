@@ -40,8 +40,8 @@
 #include <fstream>
 
 llvm::cl::opt<std::string> FunctionWhiteListFile(
-    "func-wl-file", llvm::cl::Hidden,
-    llvm::cl::desc("function whitelist file"));
+		"func-wl-file", llvm::cl::Hidden,
+		llvm::cl::desc("function whitelist file"));
 
 #define MAX_STACK_COUNT 10
 
@@ -57,7 +57,7 @@ bool getSizeCalc(llvm::Value &I, std::set<llvm::Value *> &vals, int stack_count 
 
 				if (user->getOpcode() == Instruction::Call) {
 					if (dyn_cast<llvm::CallInst>(user)->getCalledFunction()->getName().str() == std::string("llvm.umul.with.overflow.i64")) {
-//						llvm::errs() << "\nFound " << *user << "\n";
+						//						llvm::errs() << "\nFound " << *user << "\n";
 						ret = true;
 						vals.insert(user);
 						return true;
@@ -242,11 +242,11 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		std::vector<llvm::Instruction *> &uses, llvm::SmallPtrSetImpl<llvm::Instruction *> &visited, int stack_count = 0) {
 	bool ret = false;
 
-  //llvm::errs() << I << "\n";
-  if(visited.count(&I)) {
-    return false;
-  }
-  visited.insert(&I);
+	//llvm::errs() << I << "\n";
+	if(visited.count(&I)) {
+		return false;
+	}
+	visited.insert(&I);
 
 	for (auto &u : I.uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
@@ -254,21 +254,122 @@ bool recurseUsesSilent(llvm::Instruction &I,
 		if (user->getOpcode() == Instruction::GetElementPtr) {
 			ret = true;
 
-      auto found = std::find(uses.begin(), uses.end(), u);
+			auto found = std::find(uses.begin(), uses.end(), u);
 
-      if(found == uses.end()) {
-        uses.push_back(user);
-      }
+			if(found == uses.end()) {
+				uses.push_back(user);
+			}
 			//			return true;
 		}
 
 		//if (stack_count < MAX_STACK_COUNT) {
-			//			llvm::errs() << "Stack Count: " << stack_count << "\n";
-			ret |= recurseUsesSilent(*user, uses, visited, ++stack_count);
+		//			llvm::errs() << "Stack Count: " << stack_count << "\n";
+		ret |= recurseUsesSilent(*user, uses, visited, ++stack_count);
 		//}
 	}
 
 	return ret;
+}
+
+llvm::Instruction * findGEPToSameBasePtr(llvm::Function &F, llvm::Instruction & firstI) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			//			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
+			//				llvm::errs() << "findGEPToSameBasePtr " << firstI << " " << I;
+			//			}
+			if (I.getOpcode() == llvm::Instruction::GetElementPtr &&
+					firstI.getOperand(0) == I.getOperand(0) &&
+					&firstI != &I) {
+				//				llvm::errs() << "True\n";
+				return &I;
+			}
+			//			else {
+			//				llvm::errs() << "\n";
+			//			}
+		}
+	}
+
+	return nullptr;
+
+}
+
+bool areCompared(Instruction * I, Instruction * I2) {
+	llvm::SmallVector<llvm::Instruction*,8> I_loads;
+	llvm::SmallVector<llvm::Instruction*,8> I2_loads;
+
+	for (auto &u : I->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+		if (dyn_cast<llvm::Instruction>(user)->getOpcode() == llvm::Instruction::Load) {
+			I_loads.push_back(dyn_cast<llvm::Instruction>(user));
+		}
+	}
+
+	for (auto &u : I2->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+		if (dyn_cast<llvm::Instruction>(user)->getOpcode() == llvm::Instruction::Load) {
+			I2_loads.push_back(dyn_cast<llvm::Instruction>(user));
+		}
+	}
+
+	for (auto l1 : I_loads) {
+		for (auto l2 : I2_loads) {
+			for (auto &l1_u : l1->uses()) {
+				auto *user = llvm::dyn_cast<llvm::Instruction>(l1_u.getUser());
+				if (dyn_cast<llvm::Instruction>(user)->getOpcode() == llvm::Instruction::ICmp) {
+					for (auto &l2_u : l2->uses()) {
+						auto *user_2 = llvm::dyn_cast<llvm::Instruction>(l2_u.getUser());
+						if (user == user_2) {
+							return true;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	return false;
+}
+
+llvm::Instruction * dependsOnGEP(llvm::Instruction * I) {
+	if (llvm::Instruction * load = dyn_cast<llvm::Instruction>(I->getOperand(0))) {
+		if (load->getOpcode() != llvm::Instruction::Load) {
+			return nullptr;
+		}
+
+		if (llvm::Instruction * gep = dyn_cast<llvm::Instruction>(load->getOperand(0))) {
+			if (gep->getOpcode() != llvm::Instruction::GetElementPtr) {
+				return nullptr;
+			}
+			else {
+				return gep;
+			}
+		}
+	}
+
+	return nullptr;
+}
+
+void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & riInfos) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
+				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
+				if (otherGEP) {
+					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
+						llvm::errs() << "Ranged Indirection Identified!\n";
+						llvm::errs() << "Source: " << *dependsOnGEP(&I) << "\n";
+						llvm::errs() << "Target: " << I << "\n";
+						GEPDepInfo gepdepinfo;
+						gepdepinfo.source = dependsOnGEP(&I);
+						gepdepinfo.target = &I;
+					}
+				}
+			}
+		}
+	}
+
 }
 
 void identifyGEPDependence(Function &F,
@@ -482,31 +583,31 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 	errs() << "PrefetcherPass: " << F.getName() << "\n";
 
-  auto not_in = [](const auto &C, const auto &E) {
-        return C.end() == std::find(std::begin(C), std::end(C), E);
-  };
+	auto not_in = [](const auto &C, const auto &E) {
+		return C.end() == std::find(std::begin(C), std::end(C), E);
+	};
 
-  llvm::SmallVector<std::string, 32> FunctionWhiteList;
+	llvm::SmallVector<std::string, 32> FunctionWhiteList;
 
-  if (FunctionWhiteListFile.getPosition()) {
-    std::ifstream wlFile{FunctionWhiteListFile};
+	if (FunctionWhiteListFile.getPosition()) {
+		std::ifstream wlFile{FunctionWhiteListFile};
 
-    std::string funcName;
-    while (wlFile >> funcName) {
-      FunctionWhiteList.push_back(funcName);
-    }
-  }
+		std::string funcName;
+		while (wlFile >> funcName) {
+			FunctionWhiteList.push_back(funcName);
+		}
+	}
 
-  if (F.isDeclaration()) {
-    return false;
-  }
+	if (F.isDeclaration()) {
+		return false;
+	}
 
-  if (FunctionWhiteListFile.getPosition() &&
-      not_in(FunctionWhiteList, std::string{F.getName()})) {
-        LLVM_DEBUG(llvm::dbgs() << "skipping func: " << F.getName()
-                                << " reason: not in whitelist\n";);
-    return false;
-  }
+	if (FunctionWhiteListFile.getPosition() &&
+			not_in(FunctionWhiteList, std::string{F.getName()})) {
+		LLVM_DEBUG(llvm::dbgs() << "skipping func: " << F.getName()
+				<< " reason: not in whitelist\n";);
+		return false;
+	}
 
 	Result->allocs.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
@@ -514,6 +615,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
 	identifyGEPDependence(F, Result->geps);
+	identifyRangedIndirection(F,Result->ri_geps);
 
 	return false;
 }

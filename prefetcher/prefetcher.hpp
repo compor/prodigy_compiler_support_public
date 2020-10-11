@@ -73,6 +73,7 @@ struct GEPDepInfo {
 struct PrefetcherAnalysisResult {
 	llvm::SmallVector<myAllocCallInfo, 8> allocs;
 	llvm::SmallVector<GEPDepInfo, 8> geps;
+	llvm::SmallVector<GEPDepInfo, 8> ri_geps;
 	// TODO: Kuba add results from edge analysis
 };
 
