@@ -39,7 +39,7 @@
 #include <string>
 #include <fstream>
 
-#define DEBUG 0
+#define DEBUG 1
 #define INCLUDE_INTERPROC 0
 
 llvm::cl::opt<std::string> FunctionWhiteListFile(
@@ -400,6 +400,95 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 
 }
 
+void walkOperands(llvm::Instruction & I, llvm::SmallVector<llvm::Instruction*,1> & geps, int iters = 0) {
+
+	for (int i = 0; i < I.getNumOperands(); ++i) {
+		auto * op = I.getOperand(i);
+		if (llvm::Instruction * I2 = dyn_cast<llvm::Instruction>(op)) {
+			if (I2->getOpcode() == llvm::Instruction::GetElementPtr) {
+				geps.push_back(I2);
+				return;
+			}
+			else {
+				if (iters < 1) {
+					walkOperands(*I2,geps,++iters);
+				}
+			}
+		}
+	}
+}
+
+void identifyGEPDependenceOpWalk(Function &F,
+		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			if (I.getOpcode() == Instruction::GetElementPtr) {
+				llvm::SmallVector<llvm::Instruction*,1> geps;
+				if (llvm::Instruction * IOp = dyn_cast<llvm::Instruction>(I.getOperand(0))) {
+					walkOperands(*IOp, geps);
+				}
+				if (geps.size() > 0) {
+					GEPDepInfo g;
+					if (&I != geps[0])
+					{
+						g.source = I.getOperand(0);
+						g.funcSource = I.getParent()->getParent();
+						g.target = geps[0]->getOperand(0);
+						g.funcTarget = geps[0]->getParent()->getParent();
+#if DEBUG == 1
+						errs() << "source: " << *(g.source) << "\n";
+						errs() << "target: " << *(g.target) << "\n";
+#endif
+					}
+				}
+			}
+		}
+	}
+}
+
+void identifyGEPDependenceOpWalk2(Function &F,
+		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			if (I.getOpcode() == Instruction::GetElementPtr) {
+				llvm::Instruction * source = dependsOnGEP(&I);
+				if (source != nullptr) {
+					GEPDepInfo g;
+					std::string type_str;
+					llvm::raw_string_ostream rso(type_str);
+					source->getOperand(0)->getType()->print(rso);
+
+					std::string type_str_target;
+					llvm::raw_string_ostream rso_target(type_str_target);
+					I.getOperand(0)->getType()->print(rso_target);
+
+					if (rso.str().find(std::string("string")) == std::string::npos &&
+							rso_target.str().find(std::string("string")) == std::string::npos) {
+						g.source = source->getOperand(0);
+						g.funcSource = source->getParent()->getParent();
+						g.target = I.getOperand(0);
+						g.funcTarget = I.getParent()->getParent();
+
+						gepInfos.push_back(g);
+
+#if DEBUG == 1
+						errs() << "source: " << *(source) << "\n";
+						errs() << "target: " << I << "\n";
+#endif
+					}
+
+					//#if DEBUG == 1
+					//						errs() << "source: " << *(g.source) << "\n";
+					//						errs() << "target: " << *(g.target) << "\n";
+					//#endif
+				}
+			}
+		}
+	}
+}
+
 void identifyGEPDependence(Function &F,
 		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
 
@@ -422,7 +511,7 @@ void identifyGEPDependence(Function &F,
 			}
 
 			if (I.getOpcode() == Instruction::Load) { // TODO: Is there a reason for pushing back the load twice?
-				loads.push_back(&I);
+				loads.push_back(&I);                  // Or at all? We don't seem to use these loads later in the code
 			}
 
 		}
@@ -656,7 +745,8 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
-	identifyGEPDependence(F, Result->geps);
+	//	identifyGEPDependence(F, Result->geps);
+	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyRangedIndirection(F,Result->ri_geps);
 
 	return false;
