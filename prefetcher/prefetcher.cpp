@@ -39,6 +39,9 @@
 #include <string>
 #include <fstream>
 
+#define DEBUG 0
+#define INCLUDE_INTERPROC 0
+
 llvm::cl::opt<std::string> FunctionWhiteListFile(
 		"func-wl-file", llvm::cl::Hidden,
 		llvm::cl::desc("function whitelist file"));
@@ -88,18 +91,26 @@ void identifyNewA(llvm::Function &F,
 
 			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
 				if (f->getName().equals("_Znam")) {
+#if DEBUG == 1
 					errs() << "New Array Alloc: " << I << "\n"; // Pointer
 					errs() << "Argument0:" << *(CS.getArgOperand(0)); // Total Size
+#endif
 
 					// Get element size
 					std::set<llvm::Value*> vals;
 					getSizeCalc(*(CS.getArgOperand(0)),vals);
 					if (vals.size() > 0) {
+#if DEBUG == 1
 						llvm::errs() << "\ngetSizeCalc: \n";
+#endif
 						for (auto v : vals) {
+#if DEBUG == 1
 							llvm::errs() << *v << "\n";
+#endif
 							CallSite size(v);
+#if DEBUG == 1
 							llvm::errs() << *(size.getArgOperand(1));
+#endif
 
 							myAllocCallInfo allocInfo;
 							allocInfo.allocInst = &I;
@@ -107,7 +118,9 @@ void identifyNewA(llvm::Function &F,
 							allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),size.getArgOperand(1));
 							allocInfos.push_back(allocInfo);
 						}
+#if DEBUG == 1
 						llvm::errs() << "\n";
+#endif
 					}
 				}
 			}
@@ -127,8 +140,10 @@ void identifyMalloc(llvm::Function &F,
 
 			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
 				if (f->getName().equals("malloc")) {
+#if DEBUG == 1
 					errs() << "Alloc: " << I << "\n";
 					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n";
+#endif
 					myAllocCallInfo allocInfo;
 					allocInfo.allocInst = &I;
 					allocInfo.inputArguments.insert(allocInfo.inputArguments.end(),
@@ -368,9 +383,11 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 				if (otherGEP) {
 					GEPDepInfo gepdepinfo;
 					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
+#if DEBUG == 1
 						llvm::errs() << "Ranged Indirection Identified!\n";
 						llvm::errs() << "Source: " << *dependsOnGEP(&I) << "\n";
 						llvm::errs() << "Target: " << I << "\n";
+#endif
 						gepdepinfo.source = dependsOnGEP(&I);
 						gepdepinfo.load_to_copy = getRIDepLoad(&I);
 						gepdepinfo.target = &I;
@@ -429,23 +446,28 @@ void identifyGEPDependence(Function &F,
 				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
 					for (auto U : uses) {
 						if (usedInLoad(U)) {
+#if DEBUG == 1
 							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
 							errs() << *I;
 							printVector("\n  is used by:\n", uses.begin(), uses.end());
 							errs() << "\n";
+#endif
 							GEPDepInfo g;
 							g.source = I->getOperand(0);
 							g.funcSource = I->getParent()->getParent();
 							g.target = U->getOperand(0);
 							g.funcTarget = U->getParent()->getParent();
 
+#if DEBUG == 1
 							errs() << "source: " << *(g.source) << "\n";
 							errs() << "target: " << *(g.target) << "\n";
+#endif
 							gepInfos.push_back(g);
 						}
 					}
 				}
 			}
+#if INCLUDE_INTERPROC == 1
 			else if (I->getOpcode() == llvm::Instruction::Call){
 				std::vector<std::pair<llvm::Instruction *,llvm::Instruction*>> uses;
 				if (getCallGEPUses(*I, uses)) {
@@ -459,15 +481,18 @@ void identifyGEPDependence(Function &F,
 						Value* sv = v->stripPointerCasts();
 
 						//						llvm::errs() << "OMG" << v->getName().str().c_str() << "\n";
+#if DEBUG == 1
 						if (llvm::dyn_cast<Function>(sv)) {
 							errs()<< "Indirect function: \n";
 						}
+#endif
 						continue;
 					}
 
 					if (funcUsesGEP(dyn_cast<CallInst>(I)->getCalledFunction(), GEPs)) {
-
+#if DEBUG == 1
 						llvm::errs() << "Edges spanning functions:\n";
+#endif
 
 						std::set<std::pair<llvm::Instruction*,llvm::Instruction*>> edges;
 
@@ -495,8 +520,10 @@ void identifyGEPDependence(Function &F,
 						}
 
 						for (auto pair : filtered_edges) {
+#if DEBUG == 1
 							llvm::errs() << "source: " << *(pair.first->getOperand(0)) << "\n";
 							llvm::errs() << "target: " << *(pair.second->getOperand(0)) << "\n\n";
+#endif
 							GEPDepInfo g;
 							g.source = pair.first->getOperand(0);
 							g.funcSource = pair.first->getParent()->getParent(); // TODO: funcSource and funcTarget probably not needed here
@@ -574,8 +601,10 @@ void identifyGEPDependence(Function &F,
 						//							//							llvm::errs() << "BOOBOO 10\n";
 						//						}
 					}
+
 				}
 			}
+#endif
 		}
 	}
 }
@@ -592,7 +621,9 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
 
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
+#if DEBUG == 1
 	errs() << "PrefetcherPass: " << F.getName() << "\n";
+#endif
 
 	auto not_in = [](const auto &C, const auto &E) {
 		return C.end() == std::find(std::begin(C), std::end(C), E);

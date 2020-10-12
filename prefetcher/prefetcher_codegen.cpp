@@ -2,6 +2,8 @@
 //
 //
 
+#define DEBUG 0
+
 #include "llvm/Pass.h"
 // using llvm::RegisterPass
 
@@ -209,7 +211,9 @@ public:
 
 			emittedNodes.insert(AI.allocInst);
 			insertPts[AI.allocInst] = call;
+#if DEBUG == 1
 			llvm::errs() << "ALLOC INSTR: "<< *(AI.allocInst) << "\n";
+#endif
 		}
 	}
 
@@ -263,12 +267,14 @@ public:
 			args.push_back(llvm::ConstantInt::get(
 					llvm::IntegerType::get(Mod->getContext(), 32), PointerBounds_int32_t));
 
+#if DEBUG == 1
 			llvm::errs() << "emitRegisterTravEdge!\n";
 
 			llvm::errs() << *(gdi.source) << "\n";
 			llvm::errs() << *(load_instr) << "\n";
 
 			llvm::errs() << "Done RI emitRegisterTravEdge!\n";
+#endif
 
 			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 					args, "", load_instr->getNextNode());
@@ -293,12 +299,14 @@ public:
 
 				auto *insertPt = insertPts[gdi.target];
 
+#if DEBUG == 1
 				llvm::errs() << "emitRegisterTravEdge!\n";
 
 				llvm::errs() << *(gdi.source) << "\n";
 				llvm::errs() << *(gdi.target) << "\n";
 
 				llvm::errs() << "Done emitRegisterTravEdge!\n";
+#endif
 
 				auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 						args, "", insertPt->getNextNode());
@@ -321,12 +329,14 @@ public:
 			args.push_back(llvm::ConstantInt::get(
 					llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
 
+#if DEBUG == 1
 			llvm::errs() << "emitRegisterTravEdge2!\n";
 
 			llvm::errs() << *(gdi.source) << "\n";
 			llvm::errs() << *(gdi.target) << "\n";
 
 			llvm::errs() << "Done emitRegisterTravEdge2!\n";
+#endif
 
 
 
@@ -407,8 +417,10 @@ public:
 						args.push_back(llvm::ConstantInt::get(
 								llvm::IntegerType::get(Mod->getContext(), 32), NeverSquash));
 
+#if DEBUG == 1
 						llvm::errs() << "INSERT PT INSTR: "<< *(gdi.source) << "\n";
 						llvm::errs() << "INSERT PT: "<< *(insertPts[gdi.source]) << "\n";
+#endif
 						auto *insertPt = insertPts[gdi.source];
 						auto *call =
 								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
@@ -455,7 +467,9 @@ public:
 						if (llvm::dyn_cast<llvm::Argument>(gdi.source)) {
 							auto *insertPt = CurFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
 
+#if DEBUG == 1
 							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
+#endif
 
 							auto *call =
 									llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
@@ -463,8 +477,9 @@ public:
 						}
 						else {
 							auto *insertPt = llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
-
+#if DEBUG == 1
 							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
+#endif
 
 							auto *call =
 									llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
@@ -583,8 +598,10 @@ static bool shouldSkip(llvm::Function &CurFunc) {
 		return true;
 	}
 
+#if DEBUG == 1
 	llvm::outs() << "NAME:\n";
 	llvm::outs() << CurFunc.getName();
+#endif
 	return false;
 }
 
