@@ -60,6 +60,7 @@ struct GEPDepInfo {
 	llvm::Value *target;
 	llvm::Function *funcSource;
 	llvm::Function *funcTarget;
+	llvm::Instruction * load_to_copy;
 
 	bool operator<(const GEPDepInfo &Other) const {
 		return source < Other.source && target < Other.target;

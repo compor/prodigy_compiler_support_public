@@ -240,6 +240,46 @@ public:
 		Builder.CreateCall(F);
 	}
 
+	void emitRegisterRITravEdge(GEPDepInfo &gdi)
+	{
+		llvm::SmallVector<llvm::Value *, 1> args;
+		args.push_back(gdi.source);
+		//		  LoadInst(Type *Ty, Value *Ptr, const Twine &NameStr = "",
+		//		           Instruction *InsertBefore = nullptr);
+
+		BasicBlock *B = gdi.load_to_copy->getParent();
+		auto *load_instr = gdi.load_to_copy->clone();
+		B->getInstList().insert(gdi.load_to_copy->getIterator(), load_instr);
+		load_instr->setName(gdi.load_to_copy->getName());
+
+//		auto *load_instr = new llvm::LoadInst(gdi.load_to_copy->getType(), gdi.load_to_copy->getOperand(0),"load_copy",llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
+
+		if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
+			llvm::SmallVector<llvm::Value *, 2> args;
+
+			args.push_back(gdi.source);
+			args.push_back(load_instr);
+
+			args.push_back(llvm::ConstantInt::get(
+					llvm::IntegerType::get(Mod->getContext(), 32), PointerBounds_int32_t));
+
+			llvm::errs() << "emitRegisterTravEdge!\n";
+
+			llvm::errs() << *(gdi.source) << "\n";
+			llvm::errs() << *(load_instr) << "\n";
+
+			llvm::errs() << "Done RI emitRegisterTravEdge!\n";
+
+			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+					args, "", load_instr->getNextNode());
+
+			//      emitSimUserPFSetParam(*(call->getNextNode()));
+			//      emitSimUserPFSetEnable(*(call->getNextNode()));
+
+			emittedTravEdges.insert(gdi);
+		}
+	}
+
 	void emitRegisterTravEdge(GEPDepInfo &gdi) {
 		if(emittedTravEdges.count(gdi) == 0 && emittedNodes.count(gdi.source) && emittedNodes.count(gdi.target)) {
 			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
@@ -418,8 +458,8 @@ public:
 							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
 
 							auto *call =
-								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-										insertPt->getNextNode());
+									llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+											insertPt->getNextNode());
 						}
 						else {
 							auto *insertPt = llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
@@ -427,8 +467,8 @@ public:
 							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
 
 							auto *call =
-								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-										insertPt->getNextNode());
+									llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+											insertPt->getNextNode());
 						}
 
 						TriggerEdgeCount++;
@@ -585,7 +625,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 			totalNodesNum++;
 		}
 
-//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
+		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
 		pfcg.emitRegisterTrigEdge(pfa->geps);
 
 		for (GEPDepInfo & gdi : pfa->geps) {
@@ -604,12 +644,16 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 				}
 				else {
 					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
-//					assert(false);
+					//					assert(false);
 				}
 			}
 		}
 
 		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
+
+		for (GEPDepInfo & gdi : pfa->ri_geps) {
+			pfcg.emitRegisterRITravEdge(gdi);
+		}
 
 		if (auto *mainFn = CurMod.getFunction("main")) {
 			llvm::BasicBlock &bb = mainFn->getEntryBlock();

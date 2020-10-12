@@ -331,6 +331,15 @@ bool areCompared(Instruction * I, Instruction * I2) {
 	return false;
 }
 
+llvm::Instruction * getRIDepLoad(llvm::Instruction * I) {
+	if (llvm::Instruction * load = dyn_cast<llvm::Instruction>(I->getOperand(0))) {
+		if (load->getOpcode() == llvm::Instruction::Load) {
+			return load;
+		}
+	}
+	return nullptr;
+}
+
 llvm::Instruction * dependsOnGEP(llvm::Instruction * I) {
 	if (llvm::Instruction * load = dyn_cast<llvm::Instruction>(I->getOperand(0))) {
 		if (load->getOpcode() != llvm::Instruction::Load) {
@@ -357,13 +366,15 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
 				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
 				if (otherGEP) {
+					GEPDepInfo gepdepinfo;
 					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
 						llvm::errs() << "Ranged Indirection Identified!\n";
 						llvm::errs() << "Source: " << *dependsOnGEP(&I) << "\n";
 						llvm::errs() << "Target: " << I << "\n";
-						GEPDepInfo gepdepinfo;
 						gepdepinfo.source = dependsOnGEP(&I);
+						gepdepinfo.load_to_copy = getRIDepLoad(&I);
 						gepdepinfo.target = &I;
+						riInfos.push_back(gepdepinfo);
 					}
 				}
 			}
