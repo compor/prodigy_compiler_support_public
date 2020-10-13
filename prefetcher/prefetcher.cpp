@@ -397,7 +397,6 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 			}
 		}
 	}
-
 }
 
 void walkOperands(llvm::Instruction & I, llvm::SmallVector<llvm::Instruction*,1> & geps, int iters = 0) {
@@ -452,7 +451,7 @@ void identifyGEPDependenceOpWalk2(Function &F,
 
 	for (llvm::BasicBlock &BB : F) {
 		for (llvm::Instruction &I : BB) {
-			if (I.getOpcode() == Instruction::GetElementPtr) {
+			if (I.getOpcode() == Instruction::GetElementPtr && usedInLoad(&I)) {
 				llvm::Instruction * source = dependsOnGEP(&I);
 				if (source != nullptr) {
 					GEPDepInfo g;
