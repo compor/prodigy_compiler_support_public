@@ -488,6 +488,140 @@ void identifyGEPDependenceOpWalk2(Function &F,
 	}
 }
 
+void findSourceGEPs(Function &F, llvm::SmallVectorImpl<llvm::Instruction*> & source_geps)
+{
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			// errs() << "I  :" << I << "\n";
+			if (I.getOpcode() == Instruction::GetElementPtr) {
+				source_geps.push_back(&I);
+			}
+		}
+	}
+}
+
+void getLoadsUsing(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruction*> & loads, int iter = 0)
+{
+	for (auto &u : I->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == Instruction::Store) {
+			return;
+		}
+		else if (user->getOpcode() == Instruction::GetElementPtr) {
+			return;
+		}
+		else if (user->getOpcode() == Instruction::Load) {
+			loads.push_back(user);
+			return;
+		}
+
+		if (iter < 2) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
+			getLoadsUsing(user, loads, ++iter);
+		}
+		else {
+			return;
+		}
+	}
+}
+
+void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruction*> & target_geps, int iter = 0)
+{
+	for (auto &u : I->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == Instruction::Store) {
+			return;
+		}
+		else if (user->getOpcode() == Instruction::GetElementPtr) {
+			target_geps.push_back(user);
+		}
+		else if (user->getOpcode() == Instruction::Load) {
+			return;
+		}
+
+		if (iter < 2) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
+			getGEPsUsingLoad(user, target_geps, ++iter);
+		}
+		else {
+			return;
+		}
+	}
+}
+
+void identifyCorrectGEPDependence(Function &F,
+		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
+
+	llvm::SmallVector<llvm::Instruction*,8> source_geps;
+	findSourceGEPs(F,source_geps);
+
+	for (auto I : source_geps) {
+		llvm::SmallVector<llvm::Instruction*,8> loads;
+		getLoadsUsing(I, loads);
+
+		for (auto ld : loads) {
+			llvm::SmallVector<llvm::Instruction*,8> target_geps;
+			getGEPsUsingLoad(ld, target_geps);
+			for (auto target_gep : target_geps) {
+				if (usedInLoad(target_gep)) {
+
+					GEPDepInfo g;
+					g.source = I->getOperand(0);
+					g.funcSource = I->getParent()->getParent();
+					g.target = target_gep->getOperand(0);
+					g.funcTarget = target_gep->getParent()->getParent();
+
+#if DEBUG == 1
+					errs() << "source: " << *(g.source) << "\n";
+					errs() << "target: " << *(g.target) << "\n";
+#endif
+				}
+			}
+		}
+	}
+
+	std::vector<llvm::Instruction *> insns;
+
+	if (insns.size() > 0) {
+		for (auto I : insns) {
+			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
+				// usedInLoad()        finds if a GEP instruction is used in load
+				// recurseUsesSilent() finds if the GEP instruction is
+				//                     *eventually* used in another GEP instruction
+				// can detect loads of type A[B[i]]
+				// and does not detect stores of type A[B[i]]
+
+				std::vector<llvm::Instruction *> uses;
+				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
+
+				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
+					for (auto U : uses) {
+						if (usedInLoad(U)) {
+#if DEBUG == 1
+							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+							errs() << *I;
+							printVector("\n  is used by:\n", uses.begin(), uses.end());
+							errs() << "\n";
+#endif
+							GEPDepInfo g;
+							g.source = I->getOperand(0);
+							g.funcSource = I->getParent()->getParent();
+							g.target = U->getOperand(0);
+							g.funcTarget = U->getParent()->getParent();
+
+#if DEBUG == 1
+							errs() << "source: " << *(g.source) << "\n";
+							errs() << "target: " << *(g.target) << "\n";
+#endif
+							gepInfos.push_back(g);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 void identifyGEPDependence(Function &F,
 		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
 
@@ -734,8 +868,8 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
-		LLVM_DEBUG(llvm::dbgs() << "skipping func: " << F.getName()
-				<< " reason: not in whitelist\n";);
+		llvm::errs() << "skipping func: " << F.getName()
+										<< " reason: not in whitelist\n";;
 		return false;
 	}
 
@@ -744,8 +878,10 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
-	//	identifyGEPDependence(F, Result->geps);
-	identifyGEPDependenceOpWalk2(F, Result->geps);
+	identifyCorrectGEPDependence(F, Result->geps);
+//	identifyGEPDependence(F, Result->geps);
+	//	identifyGEPDependenceOpWalk(F, Result->geps);
+	//	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyRangedIndirection(F,Result->ri_geps);
 
 	return false;
