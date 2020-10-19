@@ -385,7 +385,7 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
 #if DEBUG == 1
 						llvm::errs() << "Ranged Indirection Identified!\n";
-						llvm::errs() << "Source: " << *dependsOnGEP(&I) << "\n";
+						llvm::errs() << "Source: " << *dependsOnGEP(&I) << " ";
 						llvm::errs() << "Target: " << I << "\n";
 #endif
 						gepdepinfo.source = dependsOnGEP(&I);
@@ -436,7 +436,7 @@ void identifyGEPDependenceOpWalk(Function &F,
 						g.target = geps[0]->getOperand(0);
 						g.funcTarget = geps[0]->getParent()->getParent();
 #if DEBUG == 1
-						errs() << "source: " << *(g.source) << "\n";
+						errs() << "\nsource: " << *(g.source) << " ";
 						errs() << "target: " << *(g.target) << "\n";
 #endif
 					}
@@ -473,7 +473,7 @@ void identifyGEPDependenceOpWalk2(Function &F,
 						gepInfos.push_back(g);
 
 #if DEBUG == 1
-						errs() << "source: " << *(source) << "\n";
+						errs() << "\nsource: " << *(source) << " ";
 						errs() << "target: " << I << "\n";
 #endif
 					}
@@ -570,10 +570,10 @@ void identifyCorrectGEPDependence(Function &F,
 					g.funcSource = I->getParent()->getParent();
 					g.target = target_gep->getOperand(0);
 					g.funcTarget = target_gep->getParent()->getParent();
-
+					gepInfos.push_back(g);
 #if DEBUG == 1
-					errs() << "source: " << *(g.source) << "\n";
-					errs() << "target: " << *(g.target) << "\n";
+					errs() << "\nsource: " << *I << " ";
+					errs() << "target: " << *target_gep << "\n";
 #endif
 				}
 			}
@@ -610,7 +610,7 @@ void identifyCorrectGEPDependence(Function &F,
 							g.funcTarget = U->getParent()->getParent();
 
 #if DEBUG == 1
-							errs() << "source: " << *(g.source) << "\n";
+							errs() << "\nsource: " << *(g.source) << " ";
 							errs() << "target: " << *(g.target) << "\n";
 #endif
 							gepInfos.push_back(g);
@@ -681,7 +681,7 @@ void identifyGEPDependence(Function &F,
 							g.funcTarget = U->getParent()->getParent();
 
 #if DEBUG == 1
-							errs() << "source: " << *(g.source) << "\n";
+							errs() << "\nsource: " << *(g.source) << " ";
 							errs() << "target: " << *(g.target) << "\n";
 #endif
 							gepInfos.push_back(g);
@@ -831,6 +831,26 @@ void identifyGEPDependence(Function &F,
 	}
 }
 
+void removeDuplicates(llvm::SmallVectorImpl<GEPDepInfo> &svInfos, llvm::SmallVectorImpl<GEPDepInfo> &riInfos)
+{
+	llvm::SmallVector<GEPDepInfo,8> duplicates;
+	errs() << "HELLO " << svInfos.size() << "\n";
+	for (auto g : svInfos) {
+		errs() << "HELLO2\n";
+		for (auto g2 : riInfos) {
+			errs() << "Duplicate? " << *(g.source) << " " << *(g.target);
+			if (g.source == g2.source && g.target == g2.target) {
+				errs() << "Removing: " << *(g.source) << " " << *(g.target);
+				duplicates.push_back(g);
+			}
+		}
+	}
+
+	for (auto g : duplicates) {
+		svInfos.erase(llvm::SmallVectorImpl<GEPDepInfo>::const_iterator(&g));
+	}
+}
+
 } // namespace
 
 void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -869,7 +889,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
 		llvm::errs() << "skipping func: " << F.getName()
-										<< " reason: not in whitelist\n";;
+												<< " reason: not in whitelist\n";;
 		return false;
 	}
 
@@ -879,10 +899,25 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
 	identifyCorrectGEPDependence(F, Result->geps);
-//	identifyGEPDependence(F, Result->geps);
+	//	identifyGEPDependence(F, Result->geps);
 	//	identifyGEPDependenceOpWalk(F, Result->geps);
 	//	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyRangedIndirection(F,Result->ri_geps);
+	removeDuplicates(Result->geps, Result->ri_geps);
+
+	for (auto g : Result->geps) {
+#if DEBUG == 1
+		errs() << "\nSVIsource: " << *(g.source) << " ";
+		errs() << "target: " << *(g.target) << "\n";
+#endif
+	}
+
+	for (auto g : Result->ri_geps) {
+#if DEBUG == 1
+		errs() << "\nRIsource: " << *(g.source) << " ";
+		errs() << "target: " << *(g.target) << "\n";
+#endif
+	}
 
 	return false;
 }

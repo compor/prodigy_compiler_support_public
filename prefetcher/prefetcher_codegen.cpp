@@ -248,34 +248,41 @@ public:
 	{
 		llvm::SmallVector<llvm::Value *, 1> args;
 		args.push_back(gdi.source);
-		//		  LoadInst(Type *Ty, Value *Ptr, const Twine &NameStr = "",
-		//		           Instruction *InsertBefore = nullptr);
 
+		/* Copy load instruction */
 		BasicBlock *B = gdi.load_to_copy->getParent();
 		auto *load_instr = gdi.load_to_copy->clone();
+		/* Insert copied load instruction before actual load instruction */
 		B->getInstList().insert(gdi.load_to_copy->getIterator(), load_instr);
 		load_instr->setName(gdi.load_to_copy->getName());
 
-//		auto *load_instr = new llvm::LoadInst(gdi.load_to_copy->getType(), gdi.load_to_copy->getOperand(0),"load_copy",llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
-
+		/* Emit call to register the traversal edge */
 		if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
 			llvm::SmallVector<llvm::Value *, 2> args;
 
-			args.push_back(gdi.source);
-			args.push_back(load_instr);
+			/* First argument is usually the baseptr operand to the first GEP - i.e. the source node,
+			 * however, in this case we can use the operand to the load instruction. I think
+			 * this should make the pass more robust. In BFS in particular, the first GEP accesses the index array
+			 * as a member of the Graph class, and so the bastptr to the GEP is just a pointer to the class object.
+			 * The result of the GEP, which is also the load instruction argument, is the actual pointer we're interested in.*/
+			args.push_back(dyn_cast<llvm::Instruction>(load_instr)->getOperand(0));
+			/* The baseptr of the second GEP is obtained from a load using the resulting address of the first GEP
+			 * Since we need this value before the actual load occurs, we take the result of the copied load instruction. */
+			args.push_back(dyn_cast<llvm::Instruction>(load_instr));
 
 			args.push_back(llvm::ConstantInt::get(
 					llvm::IntegerType::get(Mod->getContext(), 32), PointerBounds_int32_t));
 
 #if DEBUG == 1
-			llvm::errs() << "emitRegisterTravEdge!\n";
+			llvm::errs() << "RI emitRegisterTravEdge!\n";
 
-			llvm::errs() << *(gdi.source) << "\n";
+			llvm::errs() << *(dyn_cast<llvm::Instruction>(load_instr)->getOperand(0)) << "\n";
 			llvm::errs() << *(load_instr) << "\n";
 
 			llvm::errs() << "Done RI emitRegisterTravEdge!\n";
 #endif
 
+			/* Insert the edge between the copied load instruction and the actual load instruction */
 			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 					args, "", load_instr->getNextNode());
 
