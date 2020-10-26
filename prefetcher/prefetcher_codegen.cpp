@@ -615,6 +615,7 @@ static bool shouldSkip(llvm::Function &CurFunc) {
 //
 
 bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
+
 	bool hasModuleChanged = false;
 
 	PrefetcherCodegen pfcg(CurMod);
@@ -679,14 +680,18 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 			pfcg.emitRegisterRITravEdge(gdi);
 		}
 
-		if (auto *mainFn = CurMod.getFunction("main")) {
-			llvm::BasicBlock &bb = mainFn->getEntryBlock();
-			llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
-
-			pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
-			pfcg.emitCreateEnable(*I);
-		}
+//		llvm::errs() << "Non-mainFn name is: " << curFun->getName().str() << "\n";
 	}
+
+	if (auto *mainFn = CurMod.getFunction("main")) {
+		llvm::errs() << "mainFn name is: " << mainFn->getName().str() << "\n";
+		llvm::BasicBlock &bb = mainFn->getEntryBlock();
+		llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
+
+		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
+		pfcg.emitCreateEnable(*I);
+	}
+
 	return hasModuleChanged;
 
 }
