@@ -39,7 +39,7 @@
 #include <string>
 #include <fstream>
 
-#define DEBUG 1
+#define DEBUG 0
 #define INCLUDE_INTERPROC 0
 
 llvm::cl::opt<std::string> FunctionWhiteListFile(
@@ -78,7 +78,6 @@ bool getSizeCalc(llvm::Value &I, std::set<llvm::Value *> &vals, int stack_count 
 	return ret;
 }
 
-// TODO: Extract information from new
 void identifyNewA(llvm::Function &F,
 		llvm::SmallVectorImpl<myAllocCallInfo> &allocInfos) {
 	for (llvm::BasicBlock &BB : F) {
@@ -91,26 +90,26 @@ void identifyNewA(llvm::Function &F,
 
 			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
 				if (f->getName().equals("_Znam")) {
-#if DEBUG == 1
+//#if DEBUG == 1
 					errs() << "New Array Alloc: " << I << "\n"; // Pointer
-					errs() << "Argument0:" << *(CS.getArgOperand(0)); // Total Size
-#endif
+					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n"; // Total Size
+//#endif
 
 					// Get element size
 					std::set<llvm::Value*> vals;
 					getSizeCalc(*(CS.getArgOperand(0)),vals);
 					if (vals.size() > 0) {
-#if DEBUG == 1
+//#if DEBUG == 1
 						llvm::errs() << "\ngetSizeCalc: \n";
-#endif
+//#endif
 						for (auto v : vals) {
-#if DEBUG == 1
+//#if DEBUG == 1
 							llvm::errs() << *v << "\n";
-#endif
+//#endif
 							CallSite size(v);
-#if DEBUG == 1
+//#if DEBUG == 1
 							llvm::errs() << *(size.getArgOperand(1));
-#endif
+//#endif
 
 							myAllocCallInfo allocInfo;
 							allocInfo.allocInst = &I;
@@ -121,6 +120,9 @@ void identifyNewA(llvm::Function &F,
 #if DEBUG == 1
 						llvm::errs() << "\n";
 #endif
+					}
+					else {
+						llvm::errs() << "vals.size() == 0\n";
 					}
 				}
 			}
@@ -566,15 +568,16 @@ void identifyCorrectGEPDependence(Function &F,
 				if (usedInLoad(target_gep)) {
 
 					GEPDepInfo g;
-					g.source = I->getOperand(0);
+					g.source = I;
 					g.funcSource = I->getParent()->getParent();
 					g.target = target_gep->getOperand(0);
 					g.funcTarget = target_gep->getParent()->getParent();
+					g.load_to_copy = ld;
 					gepInfos.push_back(g);
-#if DEBUG == 1
+//#if DEBUG == 1
 					errs() << "\nsource: " << *I << " ";
 					errs() << "target: " << *target_gep << "\n";
-#endif
+//#endif
 				}
 			}
 		}
@@ -886,6 +889,12 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 		return false;
 	}
 
+	Result->allocs.clear();
+	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
+
+	identifyMalloc(F, Result->allocs);
+	identifyNewA(F, Result->allocs);
+
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
 		llvm::errs() << "skipping func: " << F.getName()
@@ -893,15 +902,10 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 		return false;
 	}
 
-	Result->allocs.clear();
-	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
-
-	identifyMalloc(F, Result->allocs);
-	identifyNewA(F, Result->allocs);
-	identifyCorrectGEPDependence(F, Result->geps);
 	//	identifyGEPDependence(F, Result->geps);
 	//	identifyGEPDependenceOpWalk(F, Result->geps);
 	//	identifyGEPDependenceOpWalk2(F, Result->geps);
+	identifyCorrectGEPDependence(F, Result->geps);
 	identifyRangedIndirection(F,Result->ri_geps);
 	removeDuplicates(Result->geps, Result->ri_geps);
 

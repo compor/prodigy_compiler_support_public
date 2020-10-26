@@ -244,11 +244,8 @@ public:
 		Builder.CreateCall(F);
 	}
 
-	void emitRegisterRITravEdge(GEPDepInfo &gdi)
+	void emitRegisterRITravEdge(GEPDepInfo &gdi, unsigned int edge_type)
 	{
-		llvm::SmallVector<llvm::Value *, 1> args;
-		args.push_back(gdi.source);
-
 		/* Copy load instruction */
 		BasicBlock *B = gdi.load_to_copy->getParent();
 		auto *load_instr = gdi.load_to_copy->clone();
@@ -271,14 +268,18 @@ public:
 			args.push_back(dyn_cast<llvm::Instruction>(load_instr));
 
 			args.push_back(llvm::ConstantInt::get(
-					llvm::IntegerType::get(Mod->getContext(), 32), PointerBounds_int32_t));
+					llvm::IntegerType::get(Mod->getContext(), 32), edge_type));
 
-#if DEBUG == 1
-			llvm::errs() << "RI emitRegisterTravEdge!\n";
-
+			if (edge_type == BaseOffset_int32_t) {
+				llvm::errs() << "SVI emitRegisterTravEdge\n";
+			}
+			else {
+				llvm::errs() << "RI emitRegisterTravEdge!\n";
+			}
 			llvm::errs() << *(dyn_cast<llvm::Instruction>(load_instr)->getOperand(0)) << "\n";
 			llvm::errs() << *(load_instr) << "\n";
 
+#if DEBUG == 1
 			llvm::errs() << "Done RI emitRegisterTravEdge!\n";
 #endif
 
@@ -626,13 +627,13 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 
 	for (llvm::Function &curFunc : CurMod) {
 		if (shouldSkip(curFunc)) {
-			DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "skipping func: "
-					<< curFunc.getName() << '\n';);
+			llvm::errs() << "skipping func: "
+					<< curFunc.getName() << '\n';
 			continue;
 		}
 
-		DEBUG_WITH_TYPE(DEBUG_TYPE, llvm::dbgs() << "processing func: "
-				<< curFunc.getName() << '\n';);
+		llvm::errs() << "processing func: "
+				<< curFunc.getName() << '\n';
 
 		PrefetcherAnalysisResult * pfa =
 				this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
@@ -640,12 +641,13 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 
 		for (auto &ai : pfa->allocs) {
 			if (ai.allocInst) {
+				llvm::errs() << "emitRegisterNode!\n";
 				pfcg.emitRegisterNode(ai);
 
-				for (GEPDepInfo &gdi : pfa->geps) {
-					pfcg.emitRegisterTravEdge(gdi);
-					totalEdgesNum++;
-				}
+//				for (GEPDepInfo &gdi : pfa->geps) {
+//					pfcg.emitRegisterTravEdge(gdi);
+//					totalEdgesNum++;
+//				}
 			}
 			totalNodesNum++;
 		}
@@ -653,31 +655,39 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
 		pfcg.emitRegisterTrigEdge(pfa->geps);
 
+//		for (GEPDepInfo & gdi : pfa->geps) {
+//			if(pfcg.emittedTravEdges.count(gdi) == 0) {
+//				// Check if both source and target are arguments (otherwise if not, then they are defined in the same function,
+//				// and should have been caught by previous call to emitRegisterTravEdge)
+//				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+//					// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
+//					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
+//				}
+//				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+//					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
+//				}
+//				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {pfa
+//					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
+//				}
+//				else {
+//					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
+//					//					assert(false);
+//				}
+//			}
+//		}
+//
+//		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
+
+		llvm::errs() << curFunc.getName() << " geps size: " << pfa->geps.size() << "\n";
 		for (GEPDepInfo & gdi : pfa->geps) {
-			if(pfcg.emittedTravEdges.count(gdi) == 0) {
-				// Check if both source and target are arguments (otherwise if not, then they are defined in the same function,
-				// and should have been caught by previous call to emitRegisterTravEdge)
-				if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					// If edge is in a different function than allocation, emit using emitRegisterTravEdge2
-					pfcg.emitRegisterTravEdge2(gdi, curFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime());
-				}
-				else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
-				}
-				else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
-					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode());
-				}
-				else {
-					pfcg.emitRegisterTravEdge2(gdi, llvm::dyn_cast<llvm::Instruction>(gdi.target)->getNextNode());
-					//					assert(false);
-				}
-			}
+			pfcg.emitRegisterRITravEdge(gdi, BaseOffset_int32_t);
+			totalEdgesNum++;
 		}
 
-		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
-
+		llvm::errs() << curFunc.getName() << " ri_geps size: " << pfa->ri_geps.size() << "\n";
 		for (GEPDepInfo & gdi : pfa->ri_geps) {
-			pfcg.emitRegisterRITravEdge(gdi);
+			pfcg.emitRegisterRITravEdge(gdi, PointerBounds_uint64_t);
+			totalEdgesNum++;
 		}
 
 //		llvm::errs() << "Non-mainFn name is: " << curFun->getName().str() << "\n";

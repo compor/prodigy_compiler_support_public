@@ -15,7 +15,7 @@ extern "C" {
 int create_params(int num_nodes_pf, int num_edges_pf, int num_triggers_pf);
 int create_enable();
 int register_node(void *base, int64_t size, int64_t node_id);
-int register_node_with_size(void *base, int64_t size, int64_t elem_size,
+int register_node_with_size(uintptr_t base, int64_t size, int64_t elem_size,
                             int64_t node_id);
 int register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to,
                        FuncId f);
@@ -55,15 +55,15 @@ int register_node(void *base, int64_t size, int64_t node_id) {
   return 0;
 }
 
-int register_node_with_size(void *base, int64_t size, int64_t elem_size,
+int register_node_with_size(uintptr_t base, int64_t size, int64_t elem_size,
                             int64_t node_id) {
-  fprintf(stderr, "calling func: %s\n", __func__);
+  fprintf(stderr, "calling func: %s %lx %p\n", __func__, (uint64_t)base, base);
   return 0;
 }
 
 int register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to,
                        FuncId f) {
-  fprintf(stderr, "calling func: %s\n", __func__);
+  fprintf(stderr, "calling func: %s %lx %lx\n", __func__, baseaddr_from, baseaddr_to);
   return 0;
 }
 
