@@ -241,6 +241,7 @@ int sim_roi_start()
 
     // And this as well? - Yes
     if (SimInSimulator() and !enable->is_enabled()) {
+    	printf("%s %s %d: waiting\n", __FILE__, __FUNCTION__, __LINE__);
         enable->wait();
     }
 	return 0;
