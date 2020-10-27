@@ -399,11 +399,20 @@ public:
 	}
 
 	// If a node is a source but not a target, then it is a trigger node.
-	void emitRegisterTrigEdge(llvm::SmallVector<GEPDepInfo, 8> &geps) {
+	void emitRegisterTrigEdge(llvm::SmallVectorImpl<GEPDepInfo> &geps, llvm::SmallVectorImpl<GEPDepInfo> &ri_geps) {
 
+		std::vector<GEPDepInfo> all_geps;
 		for (auto &gdi : geps) {
+			all_geps.push_back(gdi);
+		}
+
+		for (auto &gdi : ri_geps) {
+			all_geps.push_back(gdi);
+		}
+
+		for (auto &gdi : all_geps) {
 			bool trigger_node = true;
-			for (auto &gdi2 : geps) {
+			for (auto &gdi2 : all_geps) {
 				if (gdi.source == gdi2.target) {
 					trigger_node = false;
 				}
@@ -434,6 +443,7 @@ public:
 								llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
 										insertPt->getNextNode());
 
+						llvm::errs() << "Trigger Edge!\n";
 						TriggerEdgeCount++;
 						//          emitSimUserPFSetParam(*(call->getNextNode()));
 						//          emitSimUserPFSetEnable(*(call->getNextNode()));
@@ -445,12 +455,21 @@ public:
 		}
 	}
 
-	void emitRegisterTrigEdge2(llvm::SmallVector<GEPDepInfo, 8> &geps, llvm::Function &CurFunc) {
+	void emitRegisterTrigEdge2(llvm::SmallVectorImpl<GEPDepInfo> &geps, llvm::SmallVectorImpl<GEPDepInfo> &ri_geps, llvm::Function &CurFunc) {
 		GEPDepInfo *current_trigger;
 
+		std::vector<GEPDepInfo> all_geps;
 		for (auto &gdi : geps) {
+			all_geps.push_back(gdi);
+		}
+
+		for (auto &gdi : ri_geps) {
+			all_geps.push_back(gdi);
+		}
+
+		for (auto &gdi : all_geps) {
 			bool trigger_node = true;
-			for (auto &gdi2 : geps) {
+			for (auto &gdi2 : all_geps) {
 				if (gdi.source == gdi2.target) {
 					trigger_node = false;
 				}
@@ -494,6 +513,7 @@ public:
 											insertPt->getNextNode());
 						}
 
+						llvm::errs() << "Trigger Edge!\n";
 						TriggerEdgeCount++;
 						//          emitSimUserPFSetParam(*(call->getNextNode()));
 						//          emitSimUserPFSetEnable(*(call->getNextNode()));
@@ -653,7 +673,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
-		pfcg.emitRegisterTrigEdge(pfa->geps);
+		pfcg.emitRegisterTrigEdge(pfa->geps, pfa->ri_geps);
 
 //		for (GEPDepInfo & gdi : pfa->geps) {
 //			if(pfcg.emittedTravEdges.count(gdi) == 0) {
@@ -676,7 +696,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 //			}
 //		}
 //
-//		pfcg.emitRegisterTrigEdge2(pfa->geps, curFunc);
+		pfcg.emitRegisterTrigEdge2(pfa->geps, pfa->ri_geps, curFunc);
 
 		llvm::errs() << curFunc.getName() << " geps size: " << pfa->geps.size() << "\n";
 		for (GEPDepInfo & gdi : pfa->geps) {

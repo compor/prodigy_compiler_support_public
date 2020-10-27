@@ -492,10 +492,14 @@ void identifyGEPDependenceOpWalk2(Function &F,
 
 void findSourceGEPs(Function &F, llvm::SmallVectorImpl<llvm::Instruction*> & source_geps)
 {
+	llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 	for (llvm::BasicBlock &BB : F) {
+		llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 		for (llvm::Instruction &I : BB) {
+			llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 			// errs() << "I  :" << I << "\n";
 			if (I.getOpcode() == Instruction::GetElementPtr) {
+				llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 				source_geps.push_back(&I);
 			}
 		}
@@ -554,19 +558,26 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 void identifyCorrectGEPDependence(Function &F,
 		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
 
+	llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+
 	llvm::SmallVector<llvm::Instruction*,8> source_geps;
 	findSourceGEPs(F,source_geps);
 
 	for (auto I : source_geps) {
+		llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 		llvm::SmallVector<llvm::Instruction*,8> loads;
 		getLoadsUsing(I, loads);
 
+		llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 		for (auto ld : loads) {
+			llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 			llvm::SmallVector<llvm::Instruction*,8> target_geps;
 			getGEPsUsingLoad(ld, target_geps);
+			llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 			for (auto target_gep : target_geps) {
+				llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 				if (usedInLoad(target_gep)) {
-
+					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					GEPDepInfo g;
 					g.source = I;
 					g.funcSource = I->getParent()->getParent();
@@ -837,9 +848,7 @@ void identifyGEPDependence(Function &F,
 void removeDuplicates(llvm::SmallVectorImpl<GEPDepInfo> &svInfos, llvm::SmallVectorImpl<GEPDepInfo> &riInfos)
 {
 	llvm::SmallVector<GEPDepInfo,8> duplicates;
-	errs() << "HELLO " << svInfos.size() << "\n";
 	for (auto g : svInfos) {
-		errs() << "HELLO2\n";
 		for (auto g2 : riInfos) {
 			errs() << "Duplicate? " << *(g.source) << " " << *(g.target);
 			if (g.source == g2.source && g.target == g2.target) {
