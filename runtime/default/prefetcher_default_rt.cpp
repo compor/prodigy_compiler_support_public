@@ -55,7 +55,7 @@ int create_params(int num_nodes_pf, int num_edges_pf, int num_triggers_pf)
 {
 	int params_id = 0;
 	params = new pf_params_t(num_nodes_pf, num_edges_pf, num_triggers_pf, 4);
-	printf("pf: &params = %p\n", params);
+	printf("pf: &params = %p %d %d %d\n", params, num_nodes_pf, num_edges_pf, num_triggers_pf);
 
 	return params_id;
 }

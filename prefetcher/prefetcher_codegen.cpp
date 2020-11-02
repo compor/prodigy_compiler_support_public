@@ -224,13 +224,13 @@ public:
 		llvm::SmallVector<llvm::Value *, 4> args;
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), num_nodes_pf));
+				llvm::IntegerType::get(Mod->getContext(), 32), num_nodes_pf + 1));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf));
+				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf + 1));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount));
+				llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount + 1));
 
 		auto *insertPt = &I;
 
@@ -685,8 +685,8 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 				//					pfcg.emitRegisterTravEdge(gdi);
 				//					totalEdgesNum++;
 				//				}
+				totalNodesNum++;
 			}
-			totalNodesNum++;
 		}
 
 		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
@@ -736,7 +736,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		llvm::BasicBlock &bb = mainFn->getEntryBlock();
 		llvm::Instruction *I = bb.getFirstNonPHIOrDbg();
 
-		pfcg.emitCreateParams(*I, (int)totalNodesNum, (int)totalEdgesNum);
+		pfcg.emitCreateParams(*I, (int)totalNodesNum, emitted_traversal_edges.size());
 		pfcg.emitCreateEnable(*I);
 	}
 

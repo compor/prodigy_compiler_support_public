@@ -90,26 +90,26 @@ void identifyNewA(llvm::Function &F,
 
 			if (llvm::Function *f = llvm::dyn_cast<llvm::Function>(called)) {
 				if (f->getName().equals("_Znam")) {
-//#if DEBUG == 1
+					//#if DEBUG == 1
 					errs() << "New Array Alloc: " << I << "\n"; // Pointer
 					errs() << "Argument0:" << *(CS.getArgOperand(0)) << "\n"; // Total Size
-//#endif
+					//#endif
 
 					// Get element size
 					std::set<llvm::Value*> vals;
 					getSizeCalc(*(CS.getArgOperand(0)),vals);
 					if (vals.size() > 0) {
-//#if DEBUG == 1
+						//#if DEBUG == 1
 						llvm::errs() << "\ngetSizeCalc: \n";
-//#endif
+						//#endif
 						for (auto v : vals) {
-//#if DEBUG == 1
+							//#if DEBUG == 1
 							llvm::errs() << *v << "\n";
-//#endif
+							//#endif
 							CallSite size(v);
-//#if DEBUG == 1
+							//#if DEBUG == 1
 							llvm::errs() << *(size.getArgOperand(1));
-//#endif
+							//#endif
 
 							myAllocCallInfo allocInfo;
 							allocInfo.allocInst = &I;
@@ -385,11 +385,11 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 				if (otherGEP) {
 					GEPDepInfo gepdepinfo;
 					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
-#if DEBUG == 1
+//#if DEBUG == 1
 						llvm::errs() << "Ranged Indirection Identified!\n";
 						llvm::errs() << "Source: " << *dependsOnGEP(&I) << " ";
 						llvm::errs() << "Target: " << I << "\n";
-#endif
+//#endif
 						gepdepinfo.source = dependsOnGEP(&I);
 						gepdepinfo.load_to_copy = getRIDepLoad(&I);
 						gepdepinfo.target = &I;
@@ -585,10 +585,16 @@ void identifyCorrectGEPDependence(Function &F,
 					g.funcTarget = target_gep->getParent()->getParent();
 					g.load_to_copy = ld;
 					gepInfos.push_back(g);
-//#if DEBUG == 1
-					errs() << "\nsource: " << *I << " ";
-					errs() << "target: " << *target_gep << "\n";
-//#endif
+					//#if DEBUG == 1
+					errs() << "New GEP:\n";
+					errs() << *I << "\n" << *target_gep << "\n" << *ld << "\n";
+
+					errs() << "All GEPS: \n";
+					for (const GEPDepInfo & g : gepInfos) {
+						errs() << *(g.source) << "\n" << *(g.target) << "\n" << *(g.load_to_copy) << "\n";
+					}
+
+					//#endif
 				}
 			}
 		}
@@ -637,7 +643,7 @@ void identifyCorrectGEPDependence(Function &F,
 }
 
 void identifyGEPDependence(Function &F,
-		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
+		std::set<GEPDepInfo> &gepInfos) {
 
 	std::vector<llvm::Instruction *> insns;
 	std::vector<llvm::Instruction *> loads;
@@ -698,7 +704,7 @@ void identifyGEPDependence(Function &F,
 							errs() << "\nsource: " << *(g.source) << " ";
 							errs() << "target: " << *(g.target) << "\n";
 #endif
-							gepInfos.push_back(g);
+							gepInfos.insert(g);
 						}
 					}
 				}
@@ -845,21 +851,14 @@ void identifyGEPDependence(Function &F,
 	}
 }
 
-void removeDuplicates(llvm::SmallVectorImpl<GEPDepInfo> &svInfos, llvm::SmallVectorImpl<GEPDepInfo> &riInfos)
+void removeDuplicates(std::set<GEPDepInfo> &svInfos, std::set<GEPDepInfo> &riInfos)
 {
 	llvm::SmallVector<GEPDepInfo,8> duplicates;
-	for (auto g : svInfos) {
-		for (auto g2 : riInfos) {
-			errs() << "Duplicate? " << *(g.source) << " " << *(g.target);
-			if (g.source == g2.source && g.target == g2.target) {
-				errs() << "Removing: " << *(g.source) << " " << *(g.target);
-				duplicates.push_back(g);
-			}
+	for (auto g : riInfos) {
+		std::set<GEPDepInfo>::iterator duplicate = std::find(svInfos.begin(), svInfos.end(), g);
+		if (duplicate != svInfos.end()) {
+			svInfos.erase(duplicate);
 		}
-	}
-
-	for (auto g : duplicates) {
-		svInfos.erase(llvm::SmallVectorImpl<GEPDepInfo>::const_iterator(&g));
 	}
 }
 
@@ -901,13 +900,13 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	Result->allocs.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
 
-	identifyMalloc(F, Result->allocs);
+//	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
 
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
 		llvm::errs() << "skipping func: " << F.getName()
-												<< " reason: not in whitelist\n";;
+														<< " reason: not in whitelist\n";;
 		return false;
 	}
 
@@ -916,20 +915,26 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	//	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyCorrectGEPDependence(F, Result->geps);
 	identifyRangedIndirection(F,Result->ri_geps);
-	removeDuplicates(Result->geps, Result->ri_geps);
+	for (auto g : Result->geps) {
+//#if DEBUG == 1
+		errs() << "\nSVIsource1: " << *(g.source) << " ";
+		errs() << "target: " << *(g.target) << "\n";
+//#endif
+	}
+//	removeDuplicates(Result->geps, Result->ri_geps);
 
 	for (auto g : Result->geps) {
-#if DEBUG == 1
+//#if DEBUG == 1
 		errs() << "\nSVIsource: " << *(g.source) << " ";
 		errs() << "target: " << *(g.target) << "\n";
-#endif
+//#endif
 	}
 
 	for (auto g : Result->ri_geps) {
-#if DEBUG == 1
+//#if DEBUG == 1
 		errs() << "\nRIsource: " << *(g.source) << " ";
 		errs() << "target: " << *(g.target) << "\n";
-#endif
+//#endif
 	}
 
 	return false;
