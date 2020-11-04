@@ -205,8 +205,8 @@ public:
 			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 					args, "", insertPt);
 
-			emitSimUserPFSetParam(*(call->getNextNode()));
-			emitSimUserPFSetEnable(*(call->getNextNode()));
+//			emitSimUserPFSetParam(*(call->getNextNode()));
+//			emitSimUserPFSetEnable(*(call->getNextNode()));
 			//
 
 			emittedNodes.insert(AI.allocInst);
