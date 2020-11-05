@@ -67,7 +67,7 @@ struct GEPDepInfo {
 	}
 
 	bool operator==(const GEPDepInfo &Other) const {
-		return source == Other.source && target == Other.target && load_to_copy == Other.load_to_copy;
+		return (load_to_copy == Other.load_to_copy) || (source == Other.source && target == Other.target && load_to_copy == Other.load_to_copy);
 	}
 };
 
