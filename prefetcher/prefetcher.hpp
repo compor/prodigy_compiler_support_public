@@ -60,14 +60,17 @@ struct GEPDepInfo {
 	llvm::Value *target;
 	llvm::Function *funcSource;
 	llvm::Function *funcTarget;
+	llvm::Instruction * source_use;
 	llvm::Instruction * load_to_copy;
+	llvm::Instruction * phi_node;
+	bool phi = false;
 
 	bool operator<(const GEPDepInfo &Other) const {
 		return source < Other.source && target < Other.target;
 	}
 
 	bool operator==(const GEPDepInfo &Other) const {
-		return (load_to_copy == Other.load_to_copy) || (source == Other.source && target == Other.target && load_to_copy == Other.load_to_copy);
+		return (source == Other.source && target == Other.target);
 	}
 };
 

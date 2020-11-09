@@ -14,6 +14,7 @@
 // using llvm::IntegerType
 
 #include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
 // using llvm::Instruction
 
 #include "llvm/IR/Function.h"
@@ -205,8 +206,8 @@ public:
 			auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
 					args, "", insertPt);
 
-//			emitSimUserPFSetParam(*(call->getNextNode()));
-//			emitSimUserPFSetEnable(*(call->getNextNode()));
+			//			emitSimUserPFSetParam(*(call->getNextNode()));
+			//			emitSimUserPFSetEnable(*(call->getNextNode()));
 			//
 
 			emittedNodes.insert(AI.allocInst);
@@ -224,13 +225,13 @@ public:
 		llvm::SmallVector<llvm::Value *, 4> args;
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), num_nodes_pf + 1));
+				llvm::IntegerType::get(Mod->getContext(), 32), num_nodes_pf));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf + 1));
+				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount + 1));
+				llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount));
 
 		auto *insertPt = &I;
 
@@ -246,6 +247,11 @@ public:
 
 	bool insertIfNotEmitted(std::vector<GEPDepInfo> & emitted_traversal_edges, GEPDepInfo & edge) {
 		for (auto & e : emitted_traversal_edges) {
+
+			llvm::errs() << "insertIfNotEmitted:\n";
+			llvm::errs() << *(e.source) << " " << *(e.target) << "\n";
+			llvm::errs() << *(edge.source) << " " << *(edge.target) << "\n";
+
 			if (e == edge) {
 				return false;
 			}
@@ -273,8 +279,10 @@ public:
 				/* First argument is usually the baseptr operand to the first GEP - i.e. the source node,
 				 * however, in this case we can use the operand to the load instruction. I think
 				 * this should make the pass more robust. In BFS in particular, the first GEP accesses the index array
-				 * as a member of the Graph class, and so the bastptr to the GEP is just a pointer to the class object.
+				 * as a member of the Graph class, and so the baseptr to the GEP is just a pointer to the class object.
 				 * The result of the GEP, which is also the load instruction argument, is the actual pointer we're interested in.*/
+				llvm::errs() << "Type of load operand: \n";
+				dyn_cast<llvm::Instruction>(load_instr)->getOperand(0)->getType()->print(llvm::errs());
 				args.push_back(dyn_cast<llvm::Instruction>(load_instr)->getOperand(0));
 				/* The baseptr of the second GEP is obtained from a load using the resulting address of the first GEP
 				 * Since we need this value before the actual load occurs, we take the result of the copied load instruction. */
@@ -308,7 +316,174 @@ public:
 		}
 	}
 
-	void emitRegisterTravEdge(GEPDepInfo &gdi) {
+	llvm::Instruction * getFirstInstruction(const llvm::Function & F, llvm::Instruction * a, llvm::Instruction * b) {
+		for (auto &BB : F) {
+			for (auto &I : BB) {
+				if (&I == a) {
+					return a;
+				}
+
+				if (&I == b) {
+					return b;
+				}
+			}
+		}
+		assert(false && "Instruction not in current function!\n");
+	}
+
+	llvm::Instruction * getSecondInstruction(const llvm::Function & F, llvm::Instruction * a, llvm::Instruction * b) {
+
+		if (getFirstInstruction(F,a,b) == a) {
+			return b;
+		}
+		else if (getFirstInstruction(F,a,b) == b){
+			return a;
+		}
+
+		assert(false && "Instruction not in current function!\n");
+	}
+
+	bool needLoadCopy(llvm::Function * f, llvm::Instruction * source_load, llvm::Instruction * target_load) {
+
+		if (target_load->getOpcode() == llvm::Instruction::Load) {
+			for (auto & BB : *f) {
+				for (auto &I : BB) {
+					if (&I == source_load) {
+						return true;
+					}
+
+					if (&I == target_load) {
+						return false;
+					}
+				}
+			}
+		}
+
+		return false;
+	}
+
+	void emitRegisterTravEdge_New(GEPDepInfo &gdi, std::vector<GEPDepInfo> & emitted_traversal_edges) {
+		if(insertIfNotEmitted(emitted_traversal_edges,gdi)) {
+			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
+				llvm::SmallVector<llvm::Value *, 4> args;
+
+				llvm::errs() << __FUNCTION__ << "\n";
+				llvm::errs() << *(gdi.source) << " " << *(gdi.target) << "\n";
+
+				llvm::Instruction * insertPt = nullptr;
+
+				if (gdi.phi) {
+					llvm::errs() << "Emitting phi node as source: " << *(gdi.phi_node) << "\n";
+					args.push_back(gdi.phi_node);
+					insertPt = gdi.phi_node->getParent()->getFirstNonPHIOrDbgOrLifetime();
+				}
+				else {
+					args.push_back(gdi.source);
+				}
+
+				// dyn_cast NULL if false!
+				llvm::errs() << *(gdi.target) << "\n";
+				if (dyn_cast<llvm::Instruction>(gdi.target)) {
+					if (needLoadCopy(gdi.funcSource, gdi.source_use, cast<llvm::Instruction>(gdi.target))) {
+						llvm::Instruction * load_to_copy = (llvm::Instruction*)(gdi.target);
+
+//						auto *load_instr = (*(llvm::Instruction*)(gdi.target)).clone();
+//						/* Insert copied load instruction before actual load instruction */
+//						load_instr->setName(load_to_copy->getName());
+//						llvm::errs() << "Load instr parent: " << *load_instr << " " << load_instr->getParent() << "\n";
+
+						llvm::LoadInst * load_instr = new llvm::LoadInst(load_to_copy->getType(), load_to_copy->getOperand(0));
+
+						BasicBlock *B = ((llvm::Instruction*)(gdi.source_use))->getParent();
+						B->getInstList().insert(gdi.source_use->getIterator(), load_instr);
+						llvm::errs() << "Load instr parent: " << *load_instr << " " << load_instr->getParent() << "\n";
+
+						args.push_back(load_instr);
+						insertPt = load_instr->getNextNode();
+					}
+					else {
+						args.push_back(gdi.target);
+					}
+				}
+				else {
+					args.push_back(gdi.target);
+				}
+
+				args.push_back(llvm::ConstantInt::get(
+						llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
+
+
+				if (!insertPt) { // If insertion point hasn't been decided by Phi Node
+
+					if (llvm::dyn_cast<llvm::GlobalValue>(gdi.source) && llvm::dyn_cast<llvm::GlobalValue>(gdi.target)) {
+						llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+						insertPt = gdi.funcSource->getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
+					}
+					else if (llvm::dyn_cast<llvm::GlobalValue>(gdi.source) && !llvm::dyn_cast<llvm::GlobalValue>(gdi.target)) {
+						if (llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+							llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+							insertPt = gdi.funcSource->getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
+						}
+						else {
+							llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+							insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getNextNode();
+						}
+					}
+					else if (!llvm::dyn_cast<llvm::GlobalValue>(gdi.source) && llvm::dyn_cast<llvm::GlobalValue>(gdi.target)) {
+						if (llvm::dyn_cast<llvm::Argument>(gdi.source)) {
+							llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+							insertPt = gdi.funcSource->getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
+						}
+						else {
+							llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+							insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
+						}
+					}
+					else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+						llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+						llvm::errs() << gdi.funcSource->getName().str().c_str() << "\n";
+						insertPt = gdi.funcSource->getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
+					}
+					else if (llvm::dyn_cast<llvm::Argument>(gdi.source) && !llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+						llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+						insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getNextNode();
+					}
+					else if (!llvm::dyn_cast<llvm::Argument>(gdi.source) && llvm::dyn_cast<llvm::Argument>(gdi.target)) {
+						llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+						insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
+					}
+					else {
+						llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+						insertPt = getSecondInstruction(*(gdi.funcSource),dyn_cast<llvm::Instruction>(gdi.source),dyn_cast<llvm::Instruction>(gdi.target))->getNextNode();
+					}
+				}
+				//#if DEBUG == 1
+				llvm::errs() << "emitRegisterTravEdge!\n";
+
+				llvm::errs() << *(gdi.source) << "\n";
+				llvm::errs() << *(gdi.target) << "\n";
+				llvm::errs() << insertPt->getParent()->getParent()->getName().str().c_str() << "\n";
+
+				llvm::errs() << "end emitRegisterTravEdge?\n";
+
+				//#endif
+
+				auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+						args, "", insertPt);
+
+				//      emitSimUserPFSetParam(*(call->getNextNode()));
+				//      emitSimUserPFSetEnable(*(call->getNextNode()));
+
+				//				llvm::errs() << *call;
+				//				llvm::errs() << *(insertPt);
+				//				llvm::errs() << "Done emitRegisterTravEdge!\n";
+
+				emittedTravEdges.insert(gdi);
+			}
+		}
+	}
+
+	void emitRegisterTravEdge(GEPDepInfo &gdi, std::vector<GEPDepInfo> & emitted_traversal_edges) {
 		if(emittedTravEdges.count(gdi) == 0 && emittedNodes.count(gdi.source) && emittedNodes.count(gdi.target)) {
 			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
 				llvm::SmallVector<llvm::Value *, 4> args;
@@ -509,12 +684,12 @@ public:
 							auto *insertPt = CurFunc.getEntryBlock().getFirstNonPHIOrDbgOrLifetime();
 
 #if DEBUG == 1
-							llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
+		llvm::errs() << "INSERT PT2: "<< *insertPt << "\n";
 #endif
 
-							auto *call =
-									llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
-											insertPt->getNextNode());
+		auto *call =
+				llvm::CallInst::Create(llvm::cast<llvm::Function>(func), args, "",
+						insertPt->getNextNode());
 						}
 						else {
 							auto *insertPt = llvm::dyn_cast<llvm::Instruction>(gdi.source)->getNextNode();
@@ -690,7 +865,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
-		pfcg.emitRegisterTrigEdge(pfa->geps, pfa->ri_geps);
+		//		pfcg.emitRegisterTrigEdge(pfa->geps, pfa->ri_geps);
 
 		//		for (GEPDepInfo & gdi : pfa->geps) {
 		//			if(pfcg.emittedTravEdges.count(gdi) == 0) {
@@ -713,18 +888,18 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		//			}
 		//		}
 		//
-		pfcg.emitRegisterTrigEdge2(pfa->geps, pfa->ri_geps, curFunc);
+		//		pfcg.emitRegisterTrigEdge2(pfa->geps, pfa->ri_geps, curFunc);
 
 		llvm::errs() << curFunc.getName() << " geps size: " << pfa->geps.size() << "\n";
 
 		llvm::errs() << curFunc.getName() << " ri_geps size: " << pfa->ri_geps.size() << "\n";
-		for (GEPDepInfo & gdi : pfa->ri_geps) {
-			pfcg.emitRegisterRITravEdge(gdi, PointerBounds_uint64_t, emitted_traversal_edges);
-			totalEdgesNum++;
-		}
+		//		for (GEPDepInfo & gdi : pfa->ri_geps) {
+		//			pfcg.emitRegisterRITravEdge(gdi, PointerBounds_uint64_t, emitted_traversal_edges);
+		//			totalEdgesNum++;
+		//		}
 
 		for (GEPDepInfo & gdi : pfa->geps) {
-			pfcg.emitRegisterRITravEdge(gdi, BaseOffset_int32_t, emitted_traversal_edges);
+			pfcg.emitRegisterTravEdge_New(gdi, emitted_traversal_edges);
 			totalEdgesNum++;
 		}
 

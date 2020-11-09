@@ -385,11 +385,11 @@ void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & 
 				if (otherGEP) {
 					GEPDepInfo gepdepinfo;
 					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
-//#if DEBUG == 1
+						//#if DEBUG == 1
 						llvm::errs() << "Ranged Indirection Identified!\n";
 						llvm::errs() << "Source: " << *dependsOnGEP(&I) << " ";
 						llvm::errs() << "Target: " << I << "\n";
-//#endif
+						//#endif
 						gepdepinfo.source = dependsOnGEP(&I);
 						gepdepinfo.load_to_copy = getRIDepLoad(&I);
 						gepdepinfo.target = &I;
@@ -508,25 +508,42 @@ void findSourceGEPs(Function &F, llvm::SmallVectorImpl<llvm::Instruction*> & sou
 
 void getLoadsUsing(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruction*> & loads, int iter = 0)
 {
-	for (auto &u : I->uses()) {
-		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+	if (dyn_cast<llvm::PHINode>(I)) {
+		llvm::PHINode * pI = dyn_cast<llvm::PHINode>(I);
 
-		if (user->getOpcode() == Instruction::Store) {
-			return;
-		}
-		else if (user->getOpcode() == Instruction::GetElementPtr) {
-			return;
-		}
-		else if (user->getOpcode() == Instruction::Load) {
-			loads.push_back(user);
-			return;
-		}
+		for (auto &u : I->uses()) {
+			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
-		if (iter < 2) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
-			getLoadsUsing(user, loads, ++iter);
+			llvm::errs() << " PHI NODE USES " << *I << " " << *user << "\n";
+
+			if (user->getOpcode() == Instruction::Load) {
+				loads.push_back(user);
+				return;
+			}
+			else if (iter < 20 && user->getOpcode() != Instruction::GetElementPtr && user->getOpcode() != Instruction::Store) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
+				getLoadsUsing(user, loads, ++iter);
+			}
+			else if (iter >= 20) {
+				return;
+			}
 		}
-		else {
-			return;
+	}
+	else {
+		for (auto &u : I->uses()) {
+			auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+			llvm::errs() << __FUNCTION__ << " " << *I << " " << *user << "\n";
+
+			if (user->getOpcode() == Instruction::Load) {
+				loads.push_back(user);
+				return;
+			}
+			else if (iter < 20 && user->getOpcode() != Instruction::GetElementPtr && user->getOpcode() != Instruction::Store) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
+				getLoadsUsing(user, loads, ++iter);
+			}
+			else if (iter >= 20) {
+				return;
+			}
 		}
 	}
 }
@@ -536,17 +553,22 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 	for (auto &u : I->uses()) {
 		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
 
+		llvm::errs() << __FUNCTION__ << " CHECK " << *I << " " << *user << "\n";
+
 		if (user->getOpcode() == Instruction::Store) {
-			return;
+//			return;
 		}
 		else if (user->getOpcode() == Instruction::GetElementPtr) {
-			target_geps.push_back(user);
+			if (user->getOperand(1) == I) { // GEP is dependent only if load result is used as an index
+				target_geps.push_back(user);
+				llvm::errs() << __FUNCTION__ << " " << *user << "\n";
+			}
 		}
 		else if (user->getOpcode() == Instruction::Load) {
-			return;
+//			return;
 		}
 
-		if (iter < 2) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
+		if (iter < 5) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
 			getGEPsUsingLoad(user, target_geps, ++iter);
 		}
 		else {
@@ -558,40 +580,47 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 void identifyCorrectGEPDependence(Function &F,
 		llvm::SmallVectorImpl<GEPDepInfo> &gepInfos) {
 
-	llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+	llvm::errs() << F.getName().str().c_str() << " " << __FUNCTION__ << "\n";
 
 	llvm::SmallVector<llvm::Instruction*,8> source_geps;
 	findSourceGEPs(F,source_geps);
 
 	for (auto I : source_geps) {
-		llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 		llvm::SmallVector<llvm::Instruction*,8> loads;
 		getLoadsUsing(I, loads);
 
-		llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 		for (auto ld : loads) {
-			llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+			llvm::errs() << "LOAD: " << *ld << "\n";
 			llvm::SmallVector<llvm::Instruction*,8> target_geps;
 			getGEPsUsingLoad(ld, target_geps);
-			llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 			for (auto target_gep : target_geps) {
-				llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 				if (usedInLoad(target_gep)) {
-					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					GEPDepInfo g;
-					g.source = I;
+					g.source = I->getOperand(0);
+					g.source_use = ld;
 					g.funcSource = I->getParent()->getParent();
 					g.target = target_gep->getOperand(0);
 					g.funcTarget = target_gep->getParent()->getParent();
-					g.load_to_copy = ld;
+					//					g.load_to_copy = ld;
 					gepInfos.push_back(g);
 					//#if DEBUG == 1
+
+					// If the source GEP comes from a PHI node, we use the result of the phi node as the source edge, and insert the registration call
+					// immediately after the phi nodes
+					if (dyn_cast<llvm::Instruction>(ld->getOperand(0))->getOpcode() == llvm::Instruction::PHI) {
+						g.phi_node = dyn_cast<llvm::Instruction>(ld->getOperand(0));
+						g.phi = true;
+					}
+
 					errs() << "New GEP:\n";
 					errs() << *I << "\n" << *target_gep << "\n" << *ld << "\n";
+					if (g.phi) {
+						errs() << *(g.phi_node) << "\n";
+					}
 
 					errs() << "All GEPS: \n";
 					for (const GEPDepInfo & g : gepInfos) {
-						errs() << *(g.source) << "\n" << *(g.target) << "\n" << *(g.load_to_copy) << "\n";
+						errs() << *(g.source) << "\n" << *(g.target) << "\n";
 					}
 
 					//#endif
@@ -600,46 +629,46 @@ void identifyCorrectGEPDependence(Function &F,
 		}
 	}
 
-	std::vector<llvm::Instruction *> insns;
-
-	if (insns.size() > 0) {
-		for (auto I : insns) {
-			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
-				// usedInLoad()        finds if a GEP instruction is used in load
-				// recurseUsesSilent() finds if the GEP instruction is
-				//                     *eventually* used in another GEP instruction
-				// can detect loads of type A[B[i]]
-				// and does not detect stores of type A[B[i]]
-
-				std::vector<llvm::Instruction *> uses;
-				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
-
-				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
-					for (auto U : uses) {
-						if (usedInLoad(U)) {
-#if DEBUG == 1
-							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-							errs() << *I;
-							printVector("\n  is used by:\n", uses.begin(), uses.end());
-							errs() << "\n";
-#endif
-							GEPDepInfo g;
-							g.source = I->getOperand(0);
-							g.funcSource = I->getParent()->getParent();
-							g.target = U->getOperand(0);
-							g.funcTarget = U->getParent()->getParent();
-
-#if DEBUG == 1
-							errs() << "\nsource: " << *(g.source) << " ";
-							errs() << "target: " << *(g.target) << "\n";
-#endif
-							gepInfos.push_back(g);
-						}
-					}
-				}
-			}
-		}
-	}
+//	std::vector<llvm::Instruction *> insns;
+//
+//	if (insns.size() > 0) {
+//		for (auto I : insns) {
+//			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
+//				// usedInLoad()        finds if a GEP instruction is used in load
+//				// recurseUsesSilent() finds if the GEP instruction is
+//				//                     *eventually* used in another GEP instruction
+//				// can detect loads of type A[B[i]]
+//				// and does not detect stores of type A[B[i]]
+//
+//				std::vector<llvm::Instruction *> uses;
+//				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
+//
+//				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
+//					for (auto U : uses) {
+//						if (usedInLoad(U)) {
+//#if DEBUG == 1
+//							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+//							errs() << *I;
+//							printVector("\n  is used by:\n", uses.begin(), uses.end());
+//							errs() << "\n";
+//#endif
+//							GEPDepInfo g;
+//							g.source = I->getOperand(0);
+//							g.funcSource = I->getParent()->getParent();
+//							g.target = U->getOperand(0);
+//							g.funcTarget = U->getParent()->getParent();
+//
+//#if DEBUG == 1
+//							errs() << "\nsource: " << *(g.source) << " ";
+//							errs() << "target: " << *(g.target) << "\n";
+//#endif
+//							gepInfos.push_back(g);
+//						}
+//					}
+//				}
+//			}
+//		}
+//	}
 }
 
 void identifyGEPDependence(Function &F,
@@ -898,15 +927,17 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	}
 
 	Result->allocs.clear();
+	Result->geps.clear();
+	Result->ri_geps.clear();
 	auto &TLI = getAnalysis<llvm::TargetLibraryInfoWrapperPass>().getTLI(F);
 
-//	identifyMalloc(F, Result->allocs);
+	//	identifyMalloc(F, Result->allocs);
 	identifyNewA(F, Result->allocs);
 
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
 		llvm::errs() << "skipping func: " << F.getName()
-														<< " reason: not in whitelist\n";;
+																<< " reason: not in whitelist\n";;
 		return false;
 	}
 
@@ -914,27 +945,20 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	//	identifyGEPDependenceOpWalk(F, Result->geps);
 	//	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyCorrectGEPDependence(F, Result->geps);
-	identifyRangedIndirection(F,Result->ri_geps);
+//	identifyRangedIndirection(F,Result->ri_geps);
 	for (auto g : Result->geps) {
-//#if DEBUG == 1
-		errs() << "\nSVIsource1: " << *(g.source) << " ";
+		//#if DEBUG == 1
+		errs() << "\n" << F.getName().str().c_str() << " SVIsource1: " << *(g.source) << " ";
 		errs() << "target: " << *(g.target) << "\n";
-//#endif
+		//#endif
 	}
-//	removeDuplicates(Result->geps, Result->ri_geps);
-
-	for (auto g : Result->geps) {
-//#if DEBUG == 1
-		errs() << "\nSVIsource: " << *(g.source) << " ";
-		errs() << "target: " << *(g.target) << "\n";
-//#endif
-	}
+	//	removeDuplicates(Result->geps, Result->ri_geps);
 
 	for (auto g : Result->ri_geps) {
-//#if DEBUG == 1
+		//#if DEBUG == 1
 		errs() << "\nRIsource: " << *(g.source) << " ";
 		errs() << "target: " << *(g.target) << "\n";
-//#endif
+		//#endif
 	}
 
 	return false;
