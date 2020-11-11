@@ -232,7 +232,7 @@ public:
 				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), TriggerEdgeCount));
+				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2)); // TriggerEdgeCount
 
 		auto *insertPt = &I;
 
