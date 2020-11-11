@@ -142,6 +142,7 @@ int register_node_with_size(uintptr_t* base, int64_t size, int64_t elem_size, in
 	return err;
 }
 
+__attribute__ ((noinline))
 int
 register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f)
 {

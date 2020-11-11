@@ -171,6 +171,7 @@ public:
 	llvm::SmallSet<struct GEPDepInfo, 4> emittedTravEdges;
 	llvm::SmallPtrSet<llvm::Value *, 4> emittedTrigEdges;
 	std::map<llvm::Value *, llvm::Instruction *> insertPts;
+	unsigned int edgeCount = 0;
 
 	PrefetcherCodegen(llvm::Module &M)
 	: Mod(&M), LI(nullptr), NodeCount(0), TriggerEdgeCount(0){};
@@ -261,6 +262,56 @@ public:
 		return true;
 	}
 
+
+	void emitRegisterRITravEdge_New(GEPDepInfo &gdi, unsigned int edge_type, std::vector<GEPDepInfo> & emitted_traversal_edges)
+	{
+		/* Copy load instruction */
+		if (insertIfNotEmitted(emitted_traversal_edges,gdi)) {
+			/* Emit call to register the traversal edge */
+			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
+				llvm::SmallVector<llvm::Value *, 2> args;
+
+				/* First argument is usually the baseptr operand to the first GEP - i.e. the source node,
+				 * however, in this case we can use the operand to the load instruction. I think
+				 * this should make the pass more robust. In BFS in particular, the first GEP accesses the index array
+				 * as a member of the Graph class, and so the baseptr to the GEP is just a pointer to the class object.
+				 * The result of the GEP, which is also the load instruction argument, is the actual pointer we're interested in.*/
+				llvm::errs() << "Type of load operand: \n";
+				args.push_back(dyn_cast<llvm::Instruction>(gdi.source));
+				args.push_back(dyn_cast<llvm::Instruction>(gdi.target));
+				/* The baseptr of the second GEP is obtained from a load using the resulting address of the first GEP
+				 * Since we need this value before the actual load occurs, we take the result of the copied load instruction. */
+
+				args.push_back(llvm::ConstantInt::get(
+						llvm::IntegerType::get(Mod->getContext(), 32), edge_type));
+
+				args.push_back(llvm::ConstantInt::get(
+										llvm::IntegerType::get(Mod->getContext(), 32), edgeCount++));
+
+				if (edge_type == BaseOffset_int32_t) {
+					llvm::errs() << "SVI emitRegisterTravEdge\n";
+				}
+				else {
+					llvm::errs() << "RI emitRegisterTravEdge!\n";
+				}
+				llvm::errs() << *(gdi.source) << "\n";
+				llvm::errs() << *(gdi.target) << "\n";
+
+#if DEBUG == 1
+				llvm::errs() << "Done RI emitRegisterTravEdge!\n";
+#endif
+
+				/* Insert the edge between the copied load instruction and the actual load instruction */
+				auto *call = llvm::CallInst::Create(llvm::cast<llvm::Function>(func),
+						args, "", dyn_cast<llvm::Instruction>(dyn_cast<llvm::Instruction>(gdi.target))->getNextNode());
+
+				//      emitSimUserPFSetParam(*(call->getNextNode()));
+				//      emitSimUserPFSetEnable(*(call->getNextNode()));
+
+				emittedTravEdges.insert(gdi);
+			}
+		}
+	}
 
 	void emitRegisterRITravEdge(GEPDepInfo &gdi, unsigned int edge_type, std::vector<GEPDepInfo> & emitted_traversal_edges)
 	{
@@ -412,6 +463,8 @@ public:
 				args.push_back(llvm::ConstantInt::get(
 						llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
 
+				args.push_back(llvm::ConstantInt::get(
+										llvm::IntegerType::get(Mod->getContext(), 32), edgeCount++));
 
 				if (!insertPt) { // If insertion point hasn't been decided by Phi Node
 
@@ -770,6 +823,7 @@ public:
 	PrefetcherCodegenPass() : llvm::ModulePass(ID) {}
 	bool runOnModule(llvm::Module &CurMod) override;
 	void getAnalysisUsage(llvm::AnalysisUsage &AU) const override;
+	unsigned edgeCount = 0;
 };
 
 //
@@ -865,7 +919,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		//		pfcg.emitRegisterIdentifyEdge(pfa->geps);
-		//		pfcg.emitRegisterTrigEdge(pfa->geps, pfa->ri_geps);
+				pfcg.emitRegisterTrigEdge(pfa->geps, pfa->ri_geps);
 
 		//		for (GEPDepInfo & gdi : pfa->geps) {
 		//			if(pfcg.emittedTravEdges.count(gdi) == 0) {
@@ -893,10 +947,10 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		llvm::errs() << curFunc.getName() << " geps size: " << pfa->geps.size() << "\n";
 
 		llvm::errs() << curFunc.getName() << " ri_geps size: " << pfa->ri_geps.size() << "\n";
-		//		for (GEPDepInfo & gdi : pfa->ri_geps) {
-		//			pfcg.emitRegisterRITravEdge(gdi, PointerBounds_uint64_t, emitted_traversal_edges);
-		//			totalEdgesNum++;
-		//		}
+		for (GEPDepInfo & gdi : pfa->ri_geps) {
+			pfcg.emitRegisterRITravEdge_New(gdi, PointerBounds_uint64_t, emitted_traversal_edges);
+			totalEdgesNum++;
+		}
 
 		for (GEPDepInfo & gdi : pfa->geps) {
 			pfcg.emitRegisterTravEdge_New(gdi, emitted_traversal_edges);

@@ -46,7 +46,7 @@ llvm::cl::opt<std::string> FunctionWhiteListFile(
 		"func-wl-file", llvm::cl::Hidden,
 		llvm::cl::desc("function whitelist file"));
 
-#define MAX_STACK_COUNT 10
+#define MAX_STACK_COUNT 2
 
 namespace {
 
@@ -292,18 +292,10 @@ llvm::Instruction * findGEPToSameBasePtr(llvm::Function &F, llvm::Instruction & 
 
 	for (llvm::BasicBlock &BB : F) {
 		for (llvm::Instruction &I : BB) {
-			//			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
-			//				llvm::errs() << "findGEPToSameBasePtr " << firstI << " " << I;
-			//			}
 			if (I.getOpcode() == llvm::Instruction::GetElementPtr &&
-					firstI.getOperand(0) == I.getOperand(0) &&
-					&firstI != &I) {
-				//				llvm::errs() << "True\n";
+					firstI.getOperand(0) == I.getOperand(0) && &firstI != &I) {
 				return &I;
 			}
-			//			else {
-			//				llvm::errs() << "\n";
-			//			}
 		}
 	}
 
@@ -374,31 +366,6 @@ llvm::Instruction * dependsOnGEP(llvm::Instruction * I) {
 	}
 
 	return nullptr;
-}
-
-void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & riInfos) {
-
-	for (llvm::BasicBlock &BB : F) {
-		for (llvm::Instruction &I : BB) {
-			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
-				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
-				if (otherGEP) {
-					GEPDepInfo gepdepinfo;
-					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
-						//#if DEBUG == 1
-						llvm::errs() << "Ranged Indirection Identified!\n";
-						llvm::errs() << "Source: " << *dependsOnGEP(&I) << " ";
-						llvm::errs() << "Target: " << I << "\n";
-						//#endif
-						gepdepinfo.source = dependsOnGEP(&I);
-						gepdepinfo.load_to_copy = getRIDepLoad(&I);
-						gepdepinfo.target = &I;
-						riInfos.push_back(gepdepinfo);
-					}
-				}
-			}
-		}
-	}
 }
 
 void walkOperands(llvm::Instruction & I, llvm::SmallVector<llvm::Instruction*,1> & geps, int iters = 0) {
@@ -556,7 +523,7 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 		llvm::errs() << __FUNCTION__ << " CHECK " << *I << " " << *user << "\n";
 
 		if (user->getOpcode() == Instruction::Store) {
-//			return;
+			//			return;
 		}
 		else if (user->getOpcode() == Instruction::GetElementPtr) {
 			if (user->getOperand(1) == I) { // GEP is dependent only if load result is used as an index
@@ -565,7 +532,7 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 			}
 		}
 		else if (user->getOpcode() == Instruction::Load) {
-//			return;
+			//			return;
 		}
 
 		if (iter < 5) { // Allow up to three modifications of value between gep calc and load, provided that they are not a store or another GEP
@@ -573,6 +540,101 @@ void getGEPsUsingLoad(llvm::Instruction * I, llvm::SmallVectorImpl<llvm::Instruc
 		}
 		else {
 			return;
+		}
+	}
+}
+
+void identifyRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & riInfos) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
+				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
+				if (otherGEP) {
+					llvm::errs() << "GEPS TO SAME BASEPTR:\n";
+					llvm::errs() << I << "\n";
+					llvm::errs() << *otherGEP << "\n";
+
+					GEPDepInfo gepdepinfo;
+					if (areCompared(&I,otherGEP) && dependsOnGEP(&I)) {
+						//#if DEBUG == 1
+						llvm::errs() << "Ranged Indirection Identified!\n";
+						llvm::errs() << "Source: " << *dependsOnGEP(&I) << " ";
+						llvm::errs() << "Target: " << I << "\n";
+						//#endif
+						gepdepinfo.source = dependsOnGEP(&I);
+						gepdepinfo.load_to_copy = getRIDepLoad(&I);
+						gepdepinfo.target = &I;
+						riInfos.push_back(gepdepinfo);
+					}
+				}
+			}
+		}
+	}
+}
+
+bool RIfindGEPUsingGEP(llvm::Instruction * src, llvm::Instruction *target, int stack_count = 0) {
+	bool ret = false;
+	for (auto &u : src->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == llvm::Instruction::GetElementPtr) {
+			target = user;
+			return true;
+		}
+
+		if (stack_count < MAX_STACK_COUNT) {
+			ret |= RIfindGEPUsingGEP(user,target, ++stack_count);
+		}
+	}
+
+	return ret;
+}
+
+bool RIfindLoadUsingGEP(llvm::Instruction * src, std::vector<llvm::Instruction *> &targets, int stack_count = 0) {
+	bool ret = false;
+	for (auto &u : src->uses()) {
+		auto *user = llvm::dyn_cast<llvm::Instruction>(u.getUser());
+
+		if (user->getOpcode() == llvm::Instruction::Load) {
+			targets.push_back(user);
+			return true;
+		}
+
+		if (stack_count < MAX_STACK_COUNT) {
+			ret |= RIfindLoadUsingGEP(user, targets, ++stack_count);
+		}
+	}
+
+	return ret;
+}
+
+void identifyCorrectRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepInfo> & riInfos) {
+
+	for (llvm::BasicBlock &BB : F) {
+		for (llvm::Instruction &I : BB) {
+			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
+				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
+				if (otherGEP) {
+					llvm::errs() << "Identify Correct Ranged Indirection: Found pair!\n";
+					GEPDepInfo gepdepinfo;
+					if (areCompared(&I,otherGEP)) {
+						llvm::errs() << "Identify Correct Ranged Indirection: Are compared!\n";
+						llvm::errs() << "Identify Correct Ranged Indirection: GEP Using GEP!\n";
+						std::vector<llvm::Instruction*> targets;
+						bool found_load = RIfindLoadUsingGEP(&I, targets);
+						if (found_load) {
+							llvm::errs() << "Identify Correct Ranged Indirection: Final Load!\n";
+							llvm::errs() << "Ranged Indirection Identified!\n";
+							llvm::errs() << "Source: " << I << " ";
+							llvm::errs() << "Target: " << targets.at(0) << "\n";
+							gepdepinfo.source = I.getOperand(0);
+							gepdepinfo.target = targets.at(0);
+							riInfos.push_back(gepdepinfo);
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -629,46 +691,46 @@ void identifyCorrectGEPDependence(Function &F,
 		}
 	}
 
-//	std::vector<llvm::Instruction *> insns;
-//
-//	if (insns.size() > 0) {
-//		for (auto I : insns) {
-//			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
-//				// usedInLoad()        finds if a GEP instruction is used in load
-//				// recurseUsesSilent() finds if the GEP instruction is
-//				//                     *eventually* used in another GEP instruction
-//				// can detect loads of type A[B[i]]
-//				// and does not detect stores of type A[B[i]]
-//
-//				std::vector<llvm::Instruction *> uses;
-//				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
-//
-//				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
-//					for (auto U : uses) {
-//						if (usedInLoad(U)) {
-//#if DEBUG == 1
-//							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
-//							errs() << *I;
-//							printVector("\n  is used by:\n", uses.begin(), uses.end());
-//							errs() << "\n";
-//#endif
-//							GEPDepInfo g;
-//							g.source = I->getOperand(0);
-//							g.funcSource = I->getParent()->getParent();
-//							g.target = U->getOperand(0);
-//							g.funcTarget = U->getParent()->getParent();
-//
-//#if DEBUG == 1
-//							errs() << "\nsource: " << *(g.source) << " ";
-//							errs() << "target: " << *(g.target) << "\n";
-//#endif
-//							gepInfos.push_back(g);
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
+	//	std::vector<llvm::Instruction *> insns;
+	//
+	//	if (insns.size() > 0) {
+	//		for (auto I : insns) {
+	//			if (I->getOpcode() == llvm::Instruction::GetElementPtr) {
+	//				// usedInLoad()        finds if a GEP instruction is used in load
+	//				// recurseUsesSilent() finds if the GEP instruction is
+	//				//                     *eventually* used in another GEP instruction
+	//				// can detect loads of type A[B[i]]
+	//				// and does not detect stores of type A[B[i]]
+	//
+	//				std::vector<llvm::Instruction *> uses;
+	//				llvm::SmallPtrSet<llvm::Instruction *, 20> visited;
+	//
+	//				if (usedInLoad(I) && recurseUsesSilent(*I, uses, visited)) {
+	//					for (auto U : uses) {
+	//						if (usedInLoad(U)) {
+	//#if DEBUG == 1
+	//							errs() << "\n" << demangle(F.getName().str().c_str()) << "\n";
+	//							errs() << *I;
+	//							printVector("\n  is used by:\n", uses.begin(), uses.end());
+	//							errs() << "\n";
+	//#endif
+	//							GEPDepInfo g;
+	//							g.source = I->getOperand(0);
+	//							g.funcSource = I->getParent()->getParent();
+	//							g.target = U->getOperand(0);
+	//							g.funcTarget = U->getParent()->getParent();
+	//
+	//#if DEBUG == 1
+	//							errs() << "\nsource: " << *(g.source) << " ";
+	//							errs() << "target: " << *(g.target) << "\n";
+	//#endif
+	//							gepInfos.push_back(g);
+	//						}
+	//					}
+	//				}
+	//			}
+	//		}
+	//	}
 }
 
 void identifyGEPDependence(Function &F,
@@ -937,7 +999,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	if (FunctionWhiteListFile.getPosition() &&
 			not_in(FunctionWhiteList, std::string{F.getName()})) {
 		llvm::errs() << "skipping func: " << F.getName()
-																<< " reason: not in whitelist\n";;
+																		<< " reason: not in whitelist\n";;
 		return false;
 	}
 
@@ -945,7 +1007,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	//	identifyGEPDependenceOpWalk(F, Result->geps);
 	//	identifyGEPDependenceOpWalk2(F, Result->geps);
 	identifyCorrectGEPDependence(F, Result->geps);
-//	identifyRangedIndirection(F,Result->ri_geps);
+	identifyCorrectRangedIndirection(F,Result->ri_geps);
 	for (auto g : Result->geps) {
 		//#if DEBUG == 1
 		errs() << "\n" << F.getName().str().c_str() << " SVIsource1: " << *(g.source) << " ";

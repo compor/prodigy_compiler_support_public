@@ -19,7 +19,7 @@ int register_node_with_size(uintptr_t base, int64_t size, int64_t elem_size,
                             int64_t node_id);
 int register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to,
                        FuncId f);
-int register_trav_edge2(NodeId id_from, NodeId id_to, FuncId f);
+int register_trav_edge2(NodeId id_from, NodeId id_to, FuncId f, int id);
 int register_trig_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f,
                        FuncId sq_f);
 int register_trig_edge2(NodeId id_from, NodeId id_to, FuncId f, FuncId sq_f);
@@ -61,6 +61,7 @@ int register_node_with_size(uintptr_t base, int64_t size, int64_t elem_size,
   return 0;
 }
 
+__attribute__ ((noinline))
 int register_trav_edge1(uintptr_t baseaddr_from, uintptr_t baseaddr_to,
                        FuncId f) {
   fprintf(stderr, "calling func: %s %lx %lx\n", __func__, baseaddr_from, baseaddr_to);
