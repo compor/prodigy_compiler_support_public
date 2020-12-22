@@ -277,8 +277,12 @@ public:
 				 * as a member of the Graph class, and so the baseptr to the GEP is just a pointer to the class object.
 				 * The result of the GEP, which is also the load instruction argument, is the actual pointer we're interested in.*/
 				llvm::errs() << "Type of load operand: \n";
-				args.push_back(dyn_cast<llvm::Instruction>(gdi.source));
-				args.push_back(dyn_cast<llvm::Instruction>(gdi.target));
+				llvm::errs() << __FUNCTION__ << __LINE__ << "\n";
+				llvm::errs() << *(gdi.source) << "\n";
+				llvm::errs() << *(gdi.target) << "\n";
+				args.push_back(gdi.source);
+				args.push_back(gdi.target);
+
 				/* The baseptr of the second GEP is obtained from a load using the resulting address of the first GEP
 				 * Since we need this value before the actual load occurs, we take the result of the copied load instruction. */
 
@@ -294,8 +298,8 @@ public:
 				else {
 					llvm::errs() << "RI emitRegisterTravEdge!\n";
 				}
-				llvm::errs() << *(gdi.source) << "\n";
-				llvm::errs() << *(gdi.target) << "\n";
+				llvm::errs() << "Source: " << *(gdi.source) << "\n";
+				llvm::errs() << "Target: " << *(gdi.target) << "\n";
 
 #if DEBUG == 1
 				llvm::errs() << "Done RI emitRegisterTravEdge!\n";
@@ -856,16 +860,19 @@ RegisterPrefetcherCodegenPass(llvm::PassManagerBuilder::EP_EarlyAsPossible,
 
 static bool shouldSkip(llvm::Function &CurFunc) {
 	if (CurFunc.isIntrinsic() || CurFunc.empty()) {
+		llvm::errs() << "func is instrinsic or empty\n";
 		return true;
 	}
 
 	auto found = std::find(PrefetcherRuntime::Functions.begin(),
 			PrefetcherRuntime::Functions.end(), CurFunc.getName());
 	if (found != PrefetcherRuntime::Functions.end()) {
+		llvm::errs() << "func is in runtime\n";
 		return true;
 	}
 	if (CurFunc.getName().equals("myIntMallocFn32") ||
 			CurFunc.getName().equals("myIntMallocFn64")) {
+		llvm::errs() << "func is myIntMalloc\n";
 		return true;
 	}
 

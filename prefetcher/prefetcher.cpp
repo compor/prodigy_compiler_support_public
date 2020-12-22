@@ -616,18 +616,18 @@ void identifyCorrectRangedIndirection(Function &F, llvm::SmallVectorImpl<GEPDepI
 			if (I.getOpcode() == llvm::Instruction::GetElementPtr) {
 				llvm::Instruction * otherGEP = findGEPToSameBasePtr(F, I);
 				if (otherGEP) {
-					llvm::errs() << "Identify Correct Ranged Indirection: Found pair!\n";
+//					llvm::errs() << "Identify Correct Ranged Indirection: Found pair!\n";
 					GEPDepInfo gepdepinfo;
 					if (areCompared(&I,otherGEP)) {
-						llvm::errs() << "Identify Correct Ranged Indirection: Are compared!\n";
-						llvm::errs() << "Identify Correct Ranged Indirection: GEP Using GEP!\n";
+//						llvm::errs() << "Identify Correct Ranged Indirection: Are compared!\n";
+//						llvm::errs() << "Identify Correct Ranged Indirection: GEP Using GEP!\n";
 						std::vector<llvm::Instruction*> targets;
 						bool found_load = RIfindLoadUsingGEP(&I, targets);
 						if (found_load) {
-							llvm::errs() << "Identify Correct Ranged Indirection: Final Load!\n";
-							llvm::errs() << "Ranged Indirection Identified!\n";
-							llvm::errs() << "Source: " << I << " ";
-							llvm::errs() << "Target: " << targets.at(0) << "\n";
+//							llvm::errs() << "Identify Correct Ranged Indirection: Final Load!\n";
+//							llvm::errs() << "Ranged Indirection Identified!\n";
+//							llvm::errs() << "Source: " << I << " ";
+//							llvm::errs() << "Target: " << targets.at(0) << "\n";
 							gepdepinfo.source = I.getOperand(0);
 							gepdepinfo.target = targets.at(0);
 							riInfos.push_back(gepdepinfo);
@@ -965,9 +965,7 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
 
 bool in(llvm::SmallVectorImpl<std::string> &C, std::string E) {
 	for (std::string entry : C) {
-		llvm::errs() << "in? " << E.c_str() << " " << entry.c_str() << "\n";
 		if (E.find(entry) != std::string::npos) {
-			llvm::errs() << "in: " << E.c_str() << " " << entry.c_str() << "\n";
 			return true;
 		}
 	}
