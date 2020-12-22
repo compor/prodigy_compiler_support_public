@@ -963,15 +963,25 @@ void PrefetcherPass::getAnalysisUsage(AnalysisUsage &AU) const {
 	AU.setPreservesAll();
 }
 
+bool in(llvm::SmallVectorImpl<std::string> &C, std::string E) {
+	for (std::string entry : C) {
+		llvm::errs() << "in? " << E.c_str() << " " << entry.c_str() << "\n";
+		if (E.find(entry) != std::string::npos) {
+			llvm::errs() << "in: " << E.c_str() << " " << entry.c_str() << "\n";
+			return true;
+		}
+	}
+
+	return false;
+};
+
 bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 
 #if DEBUG == 1
 	errs() << "PrefetcherPass: " << F.getName() << "\n";
 #endif
 
-	auto not_in = [](const auto &C, const auto &E) {
-		return C.end() == std::find(std::begin(C), std::end(C), E);
-	};
+
 
 	llvm::SmallVector<std::string, 32> FunctionWhiteList;
 
@@ -997,7 +1007,7 @@ bool PrefetcherPass::runOnFunction(llvm::Function &F) {
 	identifyNewA(F, Result->allocs);
 
 	if (FunctionWhiteListFile.getPosition() &&
-			not_in(FunctionWhiteList, std::string{F.getName()})) {
+			!in(FunctionWhiteList, F.getName().str())) {
 		llvm::errs() << "skipping func: " << F.getName()
 																		<< " reason: not in whitelist\n";;
 		return false;
