@@ -432,6 +432,14 @@ public:
 					args.push_back(gdi.phi_node);
 					insertPt = gdi.phi_node->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
+				else if (dyn_cast<llvm::PHINode>(gdi.source)){
+					args.push_back(gdi.source);
+					insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getParent()->getFirstNonPHIOrDbgOrLifetime();
+				}
+				else if (dyn_cast<llvm::PHINode>(gdi.target)){
+					args.push_back(gdi.source);
+					insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getParent()->getFirstNonPHIOrDbgOrLifetime();
+				}
 				else {
 					args.push_back(gdi.source);
 				}
