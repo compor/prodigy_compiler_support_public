@@ -54,6 +54,9 @@
 #include <string>
 // using std::string
 
+#include "llvm/IR/Dominators.h"
+// dominator tree
+
 #include "prefetcher.hpp"
 
 #define DEBUG_TYPE "prefetcher-codegen"
@@ -197,7 +200,7 @@ public:
 				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2));
 
 		args.push_back(llvm::ConstantInt::get(
-				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2)); // TriggerEdgeCount
+				llvm::IntegerType::get(Mod->getContext(), 32), num_edges_pf * 2));
 
 		auto *insertPt = &I;
 
@@ -304,6 +307,28 @@ public:
 		return false;
 	}
 
+	bool isUsedInPhiInCurrentBB(llvm::BasicBlock * BB, llvm::Instruction * instr, llvm::PHINode *& phi) {
+		errs() << "Check if used in PHI \n";
+		for (auto &I : *BB) {
+			errs() << "Check " << *instr << " against " << I << "\n";
+			if (llvm::PHINode * bb_phi = dyn_cast<llvm::PHINode>(&I)) {
+				for (int i = 0; i < bb_phi->getNumIncomingValues(); ++i) {
+					llvm::errs() << "PHI: " << *(bb_phi->getIncomingValue(i)) << " " << *(dyn_cast<llvm::Value>(instr)) << "\n";
+					if (bb_phi->getIncomingValue(i) == dyn_cast<llvm::Value>(instr)) {
+						phi = bb_phi;
+						llvm::errs() << "FOUND " << *phi << "\n";
+						return true;
+					}
+				}
+			}
+			else {
+				break;
+			}
+		}
+
+		return false;
+	}
+
 	void emitRegisterTravEdge_New(GEPDepInfo &gdi, std::vector<GEPDepInfo> & emitted_traversal_edges) {
 		if(insertIfNotEmitted(emitted_traversal_edges,gdi)) {
 			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
@@ -311,20 +336,59 @@ public:
 
 				llvm::Instruction * insertPt = nullptr;
 
+				llvm::PHINode * phi_source;
+				llvm::PHINode * phi_target;
+
+				llvm::errs() << "Emit Edge: ";
+
+				llvm::Instruction * instr_src = dyn_cast<llvm::Instruction>(gdi.source);
+				llvm::Instruction * instr_target = dyn_cast<llvm::Instruction>(gdi.target);
+
+				if (instr_src) {
+					if (!dyn_cast<llvm::PHINode>(instr_src)) {
+						if (instr_src->getParent() != instr_target->getParent()) {
+							if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_src, phi_source)) {
+								llvm::errs() << "FOUND " << *phi_source << "\n";
+								gdi.source = dyn_cast<llvm::Value>(phi_source);
+							}
+						}
+						else {
+							if (isUsedInPhiInCurrentBB(instr_src->getParent(), instr_src,phi_source)) {
+								gdi.source = dyn_cast<llvm::Value>(phi_source);
+							}
+						}
+					}
+				}
+				if (llvm::Instruction * instr = dyn_cast<llvm::Instruction>(gdi.target)) {
+					if (!dyn_cast<llvm::PHINode>(gdi.target)) {
+						if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_target, phi_target)) {
+							gdi.target = dyn_cast<llvm::Value>(phi_target);
+						}
+					}
+				}
+
 				if (gdi.phi) {
+					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.phi_node);
+					errs() << __LINE__ << " " << *(gdi.phi_node);
 					insertPt = gdi.phi_node->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
-				else if (dyn_cast<llvm::PHINode>(gdi.source)){
-					args.push_back(gdi.source);
-					insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getParent()->getFirstNonPHIOrDbgOrLifetime();
-				}
 				else if (dyn_cast<llvm::PHINode>(gdi.target)){
+					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.source);
+					errs() << " " << *(gdi.source);
 					insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
-				else {
+				else if (dyn_cast<llvm::PHINode>(gdi.source)){
+					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.source);
+					errs() << " " << *(gdi.source);
+					insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getParent()->getFirstNonPHIOrDbgOrLifetime();
+				}
+				else {
+					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
+					args.push_back(gdi.source);
+					errs() << " " << *(gdi.source);
 				}
 
 				if (dyn_cast<llvm::Instruction>(gdi.target)) {
@@ -336,14 +400,17 @@ public:
 						B->getInstList().insert(gdi.source_use->getIterator(), load_instr);
 
 						args.push_back(load_instr);
+						errs() << " " << *load_instr << "\n";
 						insertPt = load_instr->getNextNode();
 					}
 					else {
 						args.push_back(gdi.target);
+						errs() << " " << *(gdi.target) << "\n";
 					}
 				}
 				else {
 					args.push_back(gdi.target);
+					errs() << " " << *(gdi.target) << "\n";
 				}
 
 				args.push_back(llvm::ConstantInt::get(
@@ -514,10 +581,11 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		PrefetcherAnalysisResult * pfa =
 				this->getAnalysis<PrefetcherPass>(curFunc).getPFA();
 
+		DominatorTree &DT = this->getAnalysis<DominatorTreeWrapperPass>(curFunc).getDomTree();
+
 
 		for (auto &ai : pfa->allocs) {
 			if (ai.allocInst) {
-				llvm::errs() << "emitRegisterNode!\n";
 				pfcg.emitRegisterNode(ai);
 				totalNodesNum++;
 			}
@@ -550,6 +618,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 void PrefetcherCodegenPass::getAnalysisUsage(llvm::AnalysisUsage &AU) const {
 	AU.addRequiredTransitive<PrefetcherPass>();
 	AU.addRequired<LoopInfoWrapperPass>();
+	AU.addRequired<DominatorTreeWrapperPass>();
 	AU.setPreservesCFG();
 
 	return;
