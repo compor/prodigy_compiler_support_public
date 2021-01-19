@@ -307,7 +307,7 @@ public:
 		return false;
 	}
 
-	bool isUsedInPhiInCurrentBB(llvm::BasicBlock * BB, llvm::Instruction * instr, llvm::PHINode *& phi) {
+	bool isUsedInPhiInCurrentBB(llvm::BasicBlock * BB, llvm::Instruction * instr, llvm::PHINode *& phi, DominatorTree & DT) {
 		errs() << "Check if used in PHI \n";
 		for (auto &I : *BB) {
 			errs() << "Check " << *instr << " against " << I << "\n";
@@ -329,7 +329,7 @@ public:
 		return false;
 	}
 
-	void emitRegisterTravEdge_New(GEPDepInfo &gdi, std::vector<GEPDepInfo> & emitted_traversal_edges) {
+	void emitRegisterTravEdge_New(GEPDepInfo &gdi, std::vector<GEPDepInfo> & emitted_traversal_edges, DominatorTree & DT) {
 		if(insertIfNotEmitted(emitted_traversal_edges,gdi)) {
 			if (auto *func = Mod->getFunction(PrefetcherRuntime::RegisterTravEdge1)) {
 				llvm::SmallVector<llvm::Value *, 4> args;
@@ -347,13 +347,13 @@ public:
 				if (instr_src) {
 					if (!dyn_cast<llvm::PHINode>(instr_src)) {
 						if (instr_src->getParent() != instr_target->getParent()) {
-							if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_src, phi_source)) {
+							if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_src, phi_source, DT)) {
 								llvm::errs() << "FOUND " << *phi_source << "\n";
 								gdi.source = dyn_cast<llvm::Value>(phi_source);
 							}
 						}
 						else {
-							if (isUsedInPhiInCurrentBB(instr_src->getParent(), instr_src,phi_source)) {
+							if (isUsedInPhiInCurrentBB(instr_src->getParent(), instr_src,phi_source, DT)) {
 								gdi.source = dyn_cast<llvm::Value>(phi_source);
 							}
 						}
@@ -361,7 +361,7 @@ public:
 				}
 				if (llvm::Instruction * instr = dyn_cast<llvm::Instruction>(gdi.target)) {
 					if (!dyn_cast<llvm::PHINode>(gdi.target)) {
-						if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_target, phi_target)) {
+						if (isUsedInPhiInCurrentBB(instr_target->getParent(), instr_target, phi_target, DT)) {
 							gdi.target = dyn_cast<llvm::Value>(phi_target);
 						}
 					}
@@ -599,7 +599,7 @@ bool PrefetcherCodegenPass::runOnModule(llvm::Module &CurMod) {
 		}
 
 		for (GEPDepInfo & gdi : pfa->geps) {
-			pfcg.emitRegisterTravEdge_New(gdi, emitted_traversal_edges);
+			pfcg.emitRegisterTravEdge_New(gdi, emitted_traversal_edges, DT);
 			totalEdgesNum++;
 		}
 	}
