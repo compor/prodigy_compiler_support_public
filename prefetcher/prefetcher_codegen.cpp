@@ -341,8 +341,6 @@ public:
 				llvm::PHINode * phi_source;
 				llvm::PHINode * phi_target;
 
-				llvm::errs() << "Emit Edge: ";
-
 				llvm::Instruction * instr_src = dyn_cast<llvm::Instruction>(gdi.source);
 				llvm::Instruction * instr_target = dyn_cast<llvm::Instruction>(gdi.target);
 
@@ -350,7 +348,6 @@ public:
 					if (!dyn_cast<llvm::PHINode>(instr_src)) {
 						if (instr_src->getParent() != instr_target->getParent()) {
 							if (isUsedInPhi(instr_target->getParent()->getParent(), instr_src, phi_source, DT)) {
-								llvm::errs() << "FOUND " << *phi_source << "\n";
 								gdi.source = dyn_cast<llvm::Value>(phi_source);
 							}
 						}
@@ -370,50 +367,22 @@ public:
 				}
 
 				if (gdi.phi) {
-					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.phi_node);
-					errs() << __LINE__ << " " << *(gdi.phi_node);
-					insertPt = gdi.phi_node->getParent()->getFirstNonPHIOrDbgOrLifetime();
+//					insertPt = gdi.phi_node->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
 				else if (dyn_cast<llvm::PHINode>(gdi.target)){
-					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.source);
-					errs() << " " << *(gdi.source);
-					insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getParent()->getFirstNonPHIOrDbgOrLifetime();
+//					insertPt = dyn_cast<llvm::Instruction>(gdi.target)->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
 				else if (dyn_cast<llvm::PHINode>(gdi.source)){
-					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.source);
-					errs() << " " << *(gdi.source);
-					insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getParent()->getFirstNonPHIOrDbgOrLifetime();
+//					insertPt = dyn_cast<llvm::Instruction>(gdi.source)->getParent()->getFirstNonPHIOrDbgOrLifetime();
 				}
 				else {
-					llvm::errs() << __FUNCTION__ << " " << __LINE__ << "\n";
 					args.push_back(gdi.source);
-					errs() << " " << *(gdi.source);
 				}
 
-				if (dyn_cast<llvm::Instruction>(gdi.target)) {
-					if (needLoadCopy(gdi.funcSource, gdi.source_use, cast<llvm::Instruction>(gdi.target))) {
-						llvm::Instruction * load_to_copy = (llvm::Instruction*)(gdi.target);
-						llvm::LoadInst * load_instr = new llvm::LoadInst(load_to_copy->getType(), load_to_copy->getOperand(0));
-
-						BasicBlock *B = ((llvm::Instruction*)(gdi.source_use))->getParent();
-						B->getInstList().insert(gdi.source_use->getIterator(), load_instr);
-
-						args.push_back(load_instr);
-						errs() << " " << *load_instr << "\n";
-						insertPt = load_instr->getNextNode();
-					}
-					else {
-						args.push_back(gdi.target);
-						errs() << " " << *(gdi.target) << "\n";
-					}
-				}
-				else {
-					args.push_back(gdi.target);
-					errs() << " " << *(gdi.target) << "\n";
-				}
+				args.push_back(gdi.target);
 
 				args.push_back(llvm::ConstantInt::get(
 						llvm::IntegerType::get(Mod->getContext(), 32), BaseOffset_int32_t));
@@ -452,6 +421,10 @@ public:
 					}
 					else {
 						insertPt = getSecondInstruction(*(gdi.funcSource),dyn_cast<llvm::Instruction>(gdi.source),dyn_cast<llvm::Instruction>(gdi.target))->getNextNode();
+					}
+
+					while (insertPt->getOpcode() == llvm::Instruction::PHI) {
+						insertPt = insertPt->getNextNode();
 					}
 				}
 
