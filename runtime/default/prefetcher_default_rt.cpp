@@ -34,6 +34,7 @@ int sim_roi_end();
 int sim_user_pf_disable();
 int delete_params();
 int delete_enable();
+void c_print_verify();
 
 // Profile
 int register_identify_edge(uintptr_t baseaddr_from, uintptr_t baseaddr_to, FuncId f);
