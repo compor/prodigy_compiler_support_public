@@ -66,7 +66,7 @@
 
 // plugin registration for opt
 
-#define DEBUG 0
+#define DEBUG 1
 
 namespace {
 
@@ -242,6 +242,7 @@ public:
 				 * this should make the pass more robust. In BFS in particular, the first GEP accesses the index array
 				 * as a member of the Graph class, and so the baseptr to the GEP is just a pointer to the class object.
 				 * The result of the GEP, which is also the load instruction argument, is the actual pointer we're interested in.*/
+
 				args.push_back(gdi.source);
 				args.push_back(gdi.target);
 
@@ -368,15 +369,27 @@ public:
 
 				if (gdi.phi) {
 					args.push_back(gdi.phi_node);
+#if DEBUG == 1
+					errs() << "Emit source: " << *(gdi.phi_node) << "\n";
+#endif
 				}
 				else if (dyn_cast<llvm::PHINode>(gdi.target)){
 					args.push_back(gdi.source);
+#if DEBUG == 1
+					errs() << "Emit source: " << *(gdi.source) << "\n";
+#endif
 				}
 				else if (dyn_cast<llvm::PHINode>(gdi.source)){
 					args.push_back(gdi.source);
+#if DEBUG == 1
+					errs() << "Emit source: " << *(gdi.source) << "\n";
+#endif
 				}
 				else {
 					args.push_back(gdi.source);
+#if DEBUG == 1
+					errs() << "Emit source: " << *(gdi.source) << "\n";
+#endif
 				}
 
 				args.push_back(gdi.target);
