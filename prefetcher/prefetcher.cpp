@@ -30,7 +30,7 @@
 
 #include "llvm/Support/CommandLine.h"
 
-#define DEBUG 0
+#define DEBUG 1
 #define MAX_STACK_COUNT 2
 
 llvm::cl::opt<std::string> FunctionWhiteListFile(
@@ -295,6 +295,10 @@ void identifyCorrectGEPDependence(Function &F,
 						g.phi_node = dyn_cast<llvm::Instruction>(ld->getOperand(0));
 						g.phi = true;
 					}
+#if DEBUG == 1
+					errs() << "Identify source: " << *g.source << "\n";
+					errs() << "Identify target: " << *g.target << "\n\n";
+#endif
 				}
 			}
 		}
