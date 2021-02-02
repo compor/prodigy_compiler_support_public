@@ -11,6 +11,19 @@ cmake_minimum_required(VERSION 3.7)
 
 project(prodigy_compiler_support C CXX)
 
+# detect if project is within parent repo or standalone
+if(NOT EXISTS ${CMAKE_SOURCE_DIR}/../sniper6.1/)
+  set(STANDALONE_BUILD TRUE)
+endif()
+
+if(STANDALONE_BUILD)
+  if(NOT PCS_SNIPER_ROOT_DIR)
+    message(FATAL_ERROR "Sniper root dir not provided via PCS_SNIPER_ROOT_DIR")
+  endif()
+else()
+  set(PCS_SNIPER_ROOT_DIR "${CMAKE_SOURCE_DIR}/../sniper6.1/")
+endif()
+
 find_package(LLVM 11 REQUIRED CONFIG)
 
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
@@ -24,7 +37,7 @@ add_definitions(${LLVM_DEFINITIONS})
 
 include_directories(${LLVM_INCLUDE_DIRS})
 
-include_directories(../sniper6.1/include/)
+include_directories("${PCS_SNIPER_ROOT_DIR}/include/")
 
 add_subdirectory(prefetcher)
 add_subdirectory(runtime)
