@@ -1,11 +1,6 @@
 # build config
 
-#add_llvm_loadable_module(LLVMPrefetcher prefetcher.cpp prefetcher_codegen.cpp)
+set(LIB_SOURCES prefetcher.cpp prefetcher_codegen.cpp RangedIndirection.cpp
+                SinValIndirection.cpp)
 
-add_llvm_library(LLVMPrefetcher MODULE
-  prefetcher.cpp
-  prefetcher_codegen.cpp
-  RangedIndirection.cpp
-  SinValIndirection.cpp
-  PLUGIN_TOOL opt)
-
+add_llvm_library(LLVMPrefetcher MODULE ${LIB_SOURCES} PLUGIN_TOOL opt)
