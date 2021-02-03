@@ -18,13 +18,14 @@ endif()
 
 if(STANDALONE_BUILD)
   if(NOT PCS_SNIPER_ROOT_DIR)
-    message(FATAL_ERROR "Sniper root dir not provided via PCS_SNIPER_ROOT_DIR")
+    message(FATAL_ERROR "Sniper root dir not provided via -DPCS_SNIPER_ROOT_DIR")
   endif()
 else()
   set(PCS_SNIPER_ROOT_DIR "${CMAKE_SOURCE_DIR}/../sniper6.1/")
 endif()
 
-find_package(LLVM 11 REQUIRED CONFIG)
+# current minimum LLVM version supported is 11
+find_package(LLVM REQUIRED CONFIG)
 
 list(APPEND CMAKE_MODULE_PATH "${LLVM_CMAKE_DIR}")
 
